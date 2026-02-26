@@ -40,6 +40,7 @@ docker compose logs -f
 
 ### 7. Test SFTP connection
 sftp -P 2222 testuser@<SERVER_IP>
+
 Password: testpassword
 
 
