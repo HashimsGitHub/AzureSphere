@@ -9,6 +9,8 @@ This project deploys a robust containerized environment with:
 - **SFTP Server** - Secure file transfer service on port 2222
 - **Docker Compose** - Orchestrated container management
 
+<img width="1177" height="992" alt="image" src="https://github.com/user-attachments/assets/7166932e-7ec7-4220-bbed-a7f84085645f" />
+
 ## Note: 
 
 All Packages / Dependencies will be installed by the setup.sh script
