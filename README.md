@@ -9,16 +9,8 @@ This project deploys a robust containerized environment with:
 - **SFTP Server** - Secure file transfer service on port 2222
 - **Docker Compose** - Orchestrated container management
 
-
-## 🔧 Prerequisites
-
-- Docker Engine (version 20.10+)
-- Docker Compose (version 2.0+)
-- Git
-- SSL certificates (for HTTPS)
-- OpenSSH client (for SFTP access)
-
-
+## STEPS 
+Note: All Packages / Dependencies will be installed by the setup script
 
 ### 1. Clone the Repository
 
