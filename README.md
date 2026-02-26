@@ -9,9 +9,13 @@ This project deploys a robust containerized environment with:
 - **SFTP Server** - Secure file transfer service on port 2222
 - **Docker Compose** - Orchestrated container management
 
-## STEPS 
-Note: All Packages / Dependencies will be installed by the setup script
+## Note: 
 
+All Packages / Dependencies will be installed by the setup.sh script
+
+Azure NSG: Please allow access on Ports 80, 443, 22 and 2222
+
+## Steps
 ### 1. Clone the Repository
 
 git clone https://github.com/HashimsGitHub/ServerTest_HTTPS_SFTP.git
