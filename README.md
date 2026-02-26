@@ -11,11 +11,13 @@ This project deploys a robust containerized environment with:
 
 <img width="1177" height="992" alt="image" src="https://github.com/user-attachments/assets/7166932e-7ec7-4220-bbed-a7f84085645f" />
 
-## Note: 
+## Notes: 
 
-All Packages / Dependencies will be installed by the setup.sh script
+- All Packages / Dependencies will be installed by the setup.sh script
 
-Azure NSG: Please allow access on Ports 80, 443, 22 and 2222
+- Azure NSG: Please allow access on Ports 80, 443, 22 and 2222
+
+- Dashboard has simulated Data 
 
 ## Steps
 ### 1. Clone the Repository
