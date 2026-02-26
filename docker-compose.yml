@@ -1,24 +1,21 @@
 version: '3.8'
 
 services:
-
-  https-server:
-    image: nginx:latest
-    container_name: https-server
+  web-dashboard:
+    build: .
+    container_name: web-dashboard
     ports:
-      - "443:443"
-    volumes:
-      - ./nginx/conf:/etc/nginx/conf.d
-      - ./nginx/certs:/etc/nginx/certs
-      - ./nginx/html:/usr/share/nginx/html
+      - "443:443"   # Map host port 443 to container
     restart: unless-stopped
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
 
   sftp-server:
-    image: atmoz/sftp:latest
+    image: atmoz/sftp
     container_name: sftp-server
     ports:
-      - "2222:22"
+      - "2222:22"    # Map host port 2222 to SFTP
     volumes:
-      - ./sftp/data:/home/testuser/files
-    command: testuser:password:1001
+      - ./sftp_data:/home/testuser/upload
+    command: testuser:testpassword:1001
     restart: unless-stopped
