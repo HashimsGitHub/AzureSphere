@@ -9,17 +9,6 @@ This project deploys a robust containerized environment with:
 - **SFTP Server** - Secure file transfer service on port 2222
 - **Docker Compose** - Orchestrated container management
 
-## 🏗 Architecture
-
-┌─────────────────────────────────────┐
-│ Azure VM (20.11.10.72) │
-│ ┌───────────────┐ ┌──────────────┐ │
-│ │ Nginx HTTPS │ │ SFTP Server│ │
-│ │ Port 443 │ │ Port 2222 │ │
-│ └───────────────┘ └──────────────┘ │
-│ Docker Compose │
-└─────────────────────────────────────┘
-
 
 ## 🔧 Prerequisites
 
@@ -39,41 +28,41 @@ cd connectivity-lab
 ### 2. Configure Environment
 Create a .env file with your configuration:
  
-# Server Configuration
+#### Server Configuration
 SERVER_IP=20.11.10.72
 SFTP_PORT=2222
 SFTP_USER=testuser
 SFTP_PASSWORD=testpassword
 
-# SSL Configuration (if using custom certificates)
+#### SSL Configuration (if using custom certificates)
 SSL_CERT_PATH=./certs/cert.pem
 SSL_KEY_PATH=./certs/key.pem
 
-### 3. Deploy the Services
-# Make the setup script executable
+#### 3. Deploy the Services
+#### Make the setup script executable
 chmod +x setup.sh
 
-# Run the deployment script
+#### Run the deployment script
 ./setup.sh
 
-### 4. Verify Deployment
-# Check running containers
+#### 4. Verify Deployment
+#### Check running containers
 docker compose ps
 
-# View logs
+#### View logs
 docker compose logs -f
 
-# Test HTTPS connection
+#### Test HTTPS connection
 curl -k https://20.11.10.72
 
-# Test SFTP connection
+#### Test SFTP connection
 sftp -P 2222 testuser@20.11.10.72
-# Password: testpassword
+Password: testpassword
 
 
-### Stop Services
+#### Stop Services
 sudo docker compose down
 
-### Start Services
+#### Start Services
 sudo docker compose up -d
 
