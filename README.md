@@ -1,6 +1,6 @@
 # AzureSphere | Server Connectivity Tool 🚀
 
-A production-ready Docker-based infrastructure solution providing secure HTTPS web serving and SFTP file transfer services on Azure Ubuntu VM.
+A Docker-based infrastructure solution providing secure HTTPS web serving and SFTP file transfer services on Azure Ubuntu VM.
 
 ## 📋 Overview
 
