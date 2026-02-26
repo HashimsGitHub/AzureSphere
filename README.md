@@ -49,8 +49,8 @@ Password: testpassword
 
 
 ### 8. Stop Services
-sudo docker compose down
+sudo docker-compose down
 
 ### 9. Start Services
-sudo docker compose up -d
+sudo docker-compose up -d
 
