@@ -11,15 +11,6 @@ This setup provides:
 
 ---
 
-## Repository Structure
-onnectivity-dashboard/
-│
-├─ index.html # Welcome webpage
-├─ Dockerfile # Web dashboard container
-├─ docker-compose.yml
-├─ sftp_data/ # Data folder for SFTP container
-├─ README.md
-└─ (other scripts if needed)
 
 ## Quick Start
 
