@@ -1,12 +1,36 @@
-# Connectivity Lab
+# Connectivity Dashboard
 
-This project deploys:
+A Docker-based application to monitor **HTTPS** and **SFTP** connectivity, and display server stats and Brisbane weather.
 
-- HTTPS Nginx server on port 443
-- SFTP server on port 2222
+This setup provides:
 
-## Deployment
+- A **Welcome webpage** with real-time HTTP and SFTP traffic stats.
+- **SFTP access** for file uploads/downloads.
+- Continuous monitoring of connectivity.
+- Fully containerized with Docker and Docker Compose.
 
-```bash
-chmod +x setup.sh
-./setup.sh
+---
+
+## Repository Structure
+onnectivity-dashboard/
+│
+├─ index.html # Welcome webpage
+├─ Dockerfile # Web dashboard container
+├─ docker-compose.yml
+├─ sftp_data/ # Data folder for SFTP container
+├─ README.md
+└─ (other scripts if needed)
+
+## Quick Start
+
+### 1. Clone the repository
+
+git clone https://github.com/yourusername/connectivity-dashboard.git
+cd connectivity-dashboard
+
+### 2. Build and run the containers
+docker-compose up -d
+
+### 3. Access the Web Dashboard
+https://20.11.10.72
+
