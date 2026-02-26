@@ -29,8 +29,14 @@ git clone https://github.com/yourusername/connectivity-dashboard.git
 cd connectivity-dashboard
 
 ### 2. Build and run the containers
-docker-compose up -d
+sudo docker-compose up -d
 
 ### 3. Access the Web Dashboard
 https://20.11.10.72
 
+### 4. Connect via SFTP
+sftp -P 2222 testuser@20.11.10.72
+Password: testpassword
+
+### Stopping the Containers
+sudo docker-compose down
