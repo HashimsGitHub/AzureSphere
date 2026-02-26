@@ -24,7 +24,7 @@ cat <<EOF > nginx/html/index.html
     <title>Welcome</title>
 </head>
 <body style="text-align:center; margin-top:100px; font-family:Arial;">
-    <h1>✅ HTTPS is Working on Port 443</h1>
+    <h1>HTTPS is Working on Port 443</h1>
     <p>Server IP: $(curl -s ifconfig.me)</p>
 </body>
 </html>
