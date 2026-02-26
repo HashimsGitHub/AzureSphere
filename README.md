@@ -40,10 +40,10 @@ docker compose ps
 docker compose logs -f
 
 ### 6. Test HTTPS connection
-curl -k https://20.11.10.72
+curl -k https://<SERVER_IP>
 
 ### 7. Test SFTP connection
-sftp -P 2222 testuser@20.11.10.72
+sftp -P 2222 testuser@<SERVER_IP>
 Password: testpassword
 
 
