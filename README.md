@@ -1,4 +1,4 @@
-# Azure Connectivity Lab 🚀
+# AzureSphere | Server Connectivity Tool 🚀
 
 A production-ready Docker-based infrastructure solution providing secure HTTPS web serving and SFTP file transfer services on Azure VM.
 
