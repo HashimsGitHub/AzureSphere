@@ -18,7 +18,7 @@ This project deploys a robust containerized environment with:
 - SSL certificates (for HTTPS)
 - OpenSSH client (for SFTP access)
 
-## 🚀 Quick Start
+
 
 ### 1. Clone the Repository
 
@@ -42,27 +42,27 @@ SSL_KEY_PATH=./certs/key.pem
 #### Make the setup script executable
 chmod +x setup.sh
 
-#### Run the deployment script
+#### 4. Run the deployment script
 ./setup.sh
 
-#### 4. Verify Deployment
+#### 5. Verify Deployment
 #### Check running containers
 docker compose ps
 
 #### View logs
 docker compose logs -f
 
-#### Test HTTPS connection
+#### 6. Test HTTPS connection
 curl -k https://20.11.10.72
 
-#### Test SFTP connection
+#### 7. Test SFTP connection
 sftp -P 2222 testuser@20.11.10.72
 Password: testpassword
 
 
-#### Stop Services
+#### 8. Stop Services
 sudo docker compose down
 
-#### Start Services
+#### 9. Start Services
 sudo docker compose up -d
 
