@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+
+  https-server:
+    image: nginx:latest
+    container_name: https-server
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/certs:/etc/nginx/certs
+      - ./nginx/html:/usr/share/nginx/html
+    restart: unless-stopped
+
+  sftp-server:
+    image: atmoz/sftp:latest
+    container_name: sftp-server
+    ports:
+      - "2222:22"
+    volumes:
+      - ./sftp/data:/home/testuser/files
+    command: testuser:password:1001
+    restart: unless-stopped
