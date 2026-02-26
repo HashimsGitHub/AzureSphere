@@ -14,7 +14,8 @@ Note: All Packages / Dependencies will be installed by the setup script
 
 ### 1. Clone the Repository
 
-git clone <your-repository-url>
+git clone https://github.com/HashimsGitHub/ServerTest_HTTPS_SFTP.git
+
 cd connectivity-lab
 
 ### 2. Deploy the Services
