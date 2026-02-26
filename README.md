@@ -25,44 +25,31 @@ This project deploys a robust containerized environment with:
 git clone <your-repository-url>
 cd connectivity-lab
 
-### 2. Configure Environment
-Create a .env file with your configuration:
- 
-#### Server Configuration
-SERVER_IP=20.11.10.72
-SFTP_PORT=2222
-SFTP_USER=testuser
-SFTP_PASSWORD=testpassword
-
-#### SSL Configuration (if using custom certificates)
-SSL_CERT_PATH=./certs/cert.pem
-SSL_KEY_PATH=./certs/key.pem
-
-#### 3. Deploy the Services
+### 2. Deploy the Services
 #### Make the setup script executable
 chmod +x setup.sh
 
-#### 4. Run the deployment script
+### 3. Run the deployment script
 ./setup.sh
 
-#### 5. Verify Deployment
+### 4. Verify Deployment
 #### Check running containers
 docker compose ps
 
 #### View logs
 docker compose logs -f
 
-#### 6. Test HTTPS connection
+### 6. Test HTTPS connection
 curl -k https://20.11.10.72
 
-#### 7. Test SFTP connection
+### 7. Test SFTP connection
 sftp -P 2222 testuser@20.11.10.72
 Password: testpassword
 
 
-#### 8. Stop Services
+### 8. Stop Services
 sudo docker compose down
 
-#### 9. Start Services
+### 9. Start Services
 sudo docker compose up -d
 
