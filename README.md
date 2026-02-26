@@ -33,7 +33,10 @@ docker compose ps
 docker compose logs -f
 
 ### 6. Test HTTPS connection
-curl -k https://<SERVER_IP>
+- Open in Browser https://<SERVER_IP>
+- Accept Certificate Warning
+- See the AzureSphere Dashboard
+
 
 ### 7. Test SFTP connection
 sftp -P 2222 testuser@<SERVER_IP>
