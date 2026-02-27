@@ -40,21 +40,21 @@ docker compose ps
 #### View logs
 docker compose logs -f
 
-### 6. Test HTTPS connection
+### 5. Test HTTPS connection
 - Open in Browser https://<SERVER_IP>
 - Accept Certificate Warning
 - See the AzureSphere Dashboard
 
 
-### 7. Test SFTP connection
+### 6. Test SFTP connection
 sftp -P 2222 testuser@<SERVER_IP>
 
 Password: password
 
 
-### 8. Stop Services
+### 7. Stop Services
 sudo docker-compose down
 
-### 9. Start Services
+### 8. Start Services
 sudo docker-compose up -d
 
