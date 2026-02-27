@@ -626,15 +626,7 @@ cat <<EOF > nginx/html/index.html
             </div>
             <div class="card-content">
                 <div class="weather-container">
-                    <a class="weatherwidget-io"
-                       href="https://forecast7.com/en/n27d47153d03/brisbane/"
-                       data-label_1="BRISBANE"
-                       data-label_2="WEATHER"
-                       data-theme="dark"
-                       data-basecolor="#1a2f3f"
-                       data-accent="#00d2ff">
-                    BRISBANE WEATHER
-                    </a>
+                <p>Today's Weather</p>
                 </div>
                 
                 <div style="margin-top: 20px; display: flex; gap: 15px; justify-content: center;">
