@@ -22,7 +22,7 @@ This project deploys a robust containerized environment with:
 ## Steps
 ### 1. Clone the Repository
 
-git clone https://github.com/HashimsGitHub/ServerTest_HTTPS_SFTP.git
+git clone https://github.com/HashimsGitHub/ServerTest_HTTPS_SFTP.git connectivity-lab
 
 cd connectivity-lab
 
