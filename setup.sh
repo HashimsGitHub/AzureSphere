@@ -625,9 +625,7 @@ cat <<EOF > nginx/html/index.html
                 <h2>Brisbane Weather</h2>
             </div>
             <div class="card-content">
-                <div class="weather-container">
-                <p>Today's Weather</p>
-                </div>
+               
                 
                 <div style="margin-top: 20px; display: flex; gap: 15px; justify-content: center;">
                     <div style="text-align: center;">
