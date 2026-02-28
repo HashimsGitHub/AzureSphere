@@ -60,8 +60,10 @@ SFTP_Password: password
 
 
 ### 7. Stop Services
+```bash
 sudo docker-compose down
-
+```
 ### 8. Start Services
+```bash
 sudo docker-compose up -d
-
+```
