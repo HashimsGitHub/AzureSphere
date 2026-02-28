@@ -21,9 +21,9 @@ This project deploys a robust containerized environment with:
 
 ## Steps
 ### 1. Clone the Repository
-
+```bash
 git clone https://github.com/HashimsGitHub/ServerTest_HTTPS_SFTP.git connectivity-lab
-
+```
 cd connectivity-lab
 
 ### 2. Deploy the Services
