@@ -24,22 +24,28 @@ This project deploys a robust containerized environment with:
 ```bash
 git clone https://github.com/HashimsGitHub/ServerTest_HTTPS_SFTP.git connectivity-lab
 ```
+```bash
 cd connectivity-lab
+```
 
 ### 2. Deploy the Services
 #### Make the setup script executable
+```bash
 chmod +x setup.sh
-
+```
 ### 3. Run the deployment script
+```bash
 ./setup.sh
-
+```
 ### 4. Verify Deployment
 #### Check running containers
+```bash
 docker compose ps
-
+```
 #### View logs
+```bash
 docker compose logs -f
-
+```
 ### 5. Test HTTPS connection
 - Open in Browser https://<SERVER_IP>
 - Accept Certificate Warning
@@ -47,9 +53,10 @@ docker compose logs -f
 
 
 ### 6. Test SFTP connection
+
 sftp -P 2222 testuser@<SERVER_IP>
 
-Password: password
+SFTP_Password: password
 
 
 ### 7. Stop Services
