@@ -1,6 +1,6 @@
 # AzureSphere | Server Connectivity Tool 🚀
 
-A Docker-based infrastructure solution providing secure HTTPS web serving and SFTP file transfer services on Azure Ubuntu VM.
+A Docker-based infrastructure solution providing secure HTTPS web serving and SFTP file transfer services on Azure Ubuntu VM using Azure Private Link Service-Private Endpoint pair.
 
 ## 📋 Overview
 
@@ -38,15 +38,20 @@ chmod +x setup.sh
 ./setup.sh
 ```
 ### 4. Test HTTPS connection
-- Open in Browser https://<SERVER_IP>
+- Open in Browser https://<TARGET_IP>
 - Accept Certificate Warning
 - See the AzureSphere Dashboard
 ### 5. Test SFTP connection
 
-sftp -P 2222 testuser@<SERVER_IP>
+sftp -P 2222 testuser@<TARGET_IP>
 
 SFTP_Password: password
 
+To download a testfile.txt over SFTP run the following command (after replacing the TARGET_IP address)
+
+```bash
+sftp -P 2222 testuser@<TARGET_IP>:files/testfile.txt .
+```
 ### 6. Troublehshooting  
 #### Check running containers
 ```bash
