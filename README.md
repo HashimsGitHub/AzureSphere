@@ -54,7 +54,7 @@ sudo docker compose ps
 ```
 #### View logs
 ```bash
-sudu docker compose logs -f
+sudo docker compose logs -f
 ```
 ### 7. Stop Services
 ```bash
