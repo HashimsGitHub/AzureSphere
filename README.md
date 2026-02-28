@@ -37,28 +37,25 @@ chmod +x setup.sh
 ```bash
 ./setup.sh
 ```
-### 4. Verify Deployment
-#### Check running containers
-```bash
-docker compose ps
-```
-#### View logs
-```bash
-docker compose logs -f
-```
-### 5. Test HTTPS connection
+### 4. Test HTTPS connection
 - Open in Browser https://<SERVER_IP>
 - Accept Certificate Warning
 - See the AzureSphere Dashboard
-
-
-### 6. Test SFTP connection
+### 5. Test SFTP connection
 
 sftp -P 2222 testuser@<SERVER_IP>
 
 SFTP_Password: password
 
-
+### 6. Troublehshooting  
+#### Check running containers
+```bash
+sudo docker compose ps
+```
+#### View logs
+```bash
+sudu docker compose logs -f
+```
 ### 7. Stop Services
 ```bash
 sudo docker-compose down
