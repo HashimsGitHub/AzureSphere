@@ -326,5 +326,6 @@ echo "Starting Docker containers..."
 sudo docker compose up -d
 
 echo "Deployment Complete!"
-echo "Test HTTPS: https://$(curl -s ifconfig.me)"
-echo "Test SFTP: sftp -P 2222 testuser@$(curl -s ifconfig.me)"
+echo "To test HTTPS please open this in browser : https://$(curl -s ifconfig.me)"
+echo "To test SFTP connectivity please run this command in shell : sftp -P 2222 testuser@$(curl -s ifconfig.me)"
+echo "Password for SFTP is : password" 
