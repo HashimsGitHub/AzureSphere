@@ -52,7 +52,7 @@ To download a testfile.txt over SFTP run the following command (after replacing 
 ```bash
 sftp -P 2222 testuser@<TARGET_IP>:files/testfile.txt .
 ```
-### 6. Troublehshooting  
+### 6. Troubleshooting  
 #### Check running containers
 ```bash
 sudo docker compose ps
