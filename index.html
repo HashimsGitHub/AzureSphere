@@ -1,708 +1,1211 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AzureSphere | Server Connectivity Dashboard</title>
-    
-    <!-- Fonts & Icons -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AzureSphere | Digital Twin</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root {
+  --bg:       #080d12;
+  --bg2:      #0d1520;
+  --bg3:      #111e2a;
+  --panel:    #0f1c28;
+  --border:   rgba(0,210,255,0.12);
+  --border2:  rgba(0,210,255,0.22);
+  --cyan:     #00d2ff;
+  --cyan-dim: rgba(0,210,255,0.15);
+  --cyan-glow:rgba(0,210,255,0.35);
+  --green:    #00e676;
+  --green-dim:rgba(0,230,118,0.15);
+  --red:      #ff4b4b;
+  --red-dim:  rgba(255,75,75,0.15);
+  --amber:    #ffb300;
+  --amber-dim:rgba(255,179,0,0.15);
+  --text:     #c8dce8;
+  --text-dim: #5a7a8e;
+  --text-muted:#3a5566;
+  --mono:     'JetBrains Mono', monospace;
+  --sans:     'Syne', sans-serif;
+  --radius:   12px;
+  --radius-lg:18px;
+}
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #0b1721 0%, #1a2f3f 100%);
-            color: #e5e9f0;
-            min-height: 100vh;
-            position: relative;
-            overflow-x: hidden;
-        }
+* { margin:0; padding:0; box-sizing:border-box; }
 
-        /* Animated background particles */
-        body::before {
-            content: '';
-            position: fixed;
-            width: 100%;
-            height: 100%;
-            background-image: 
-                radial-gradient(circle at 20% 30%, rgba(0, 255, 255, 0.05) 0%, transparent 20%),
-                radial-gradient(circle at 80% 70%, rgba(0, 200, 255, 0.05) 0%, transparent 20%);
-            pointer-events: none;
-        }
+body {
+  font-family: var(--mono);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 30px 24px;
-            position: relative;
-            z-index: 1;
-        }
+/* grid bg */
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background-image:
+    linear-gradient(rgba(0,210,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,210,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events:none;
+  z-index:0;
+}
 
-        /* Header Section */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
+.wrap { max-width:1440px; margin:0 auto; padding:24px 28px; position:relative; z-index:1; }
 
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
+/* ─── HEADER ─── */
+.header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:28px; padding-bottom:20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap:wrap; gap:16px;
+}
+.logo {
+  display:flex; align-items:center; gap:14px;
+}
+.logo-mark {
+  width:42px; height:42px;
+  border:1px solid var(--cyan);
+  border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px; color:var(--cyan);
+  box-shadow: 0 0 16px var(--cyan-glow), inset 0 0 16px rgba(0,210,255,0.05);
+}
+.logo-text { font-family:var(--sans); }
+.logo-text h1 { font-size:22px; font-weight:700; color:#fff; letter-spacing:-0.02em; }
+.logo-text .sub { font-size:11px; color:var(--text-dim); letter-spacing:0.12em; text-transform:uppercase; margin-top:2px; }
 
-        .logo-icon {
-            width: 50px;
-            height: 50px;
-            background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            color: white;
-            box-shadow: 0 10px 20px rgba(0, 210, 255, 0.3);
-        }
+.header-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.pill {
+  display:flex; align-items:center; gap:7px;
+  padding:7px 14px; border-radius:40px;
+  border:1px solid var(--border); font-size:12px; color:var(--text-dim);
+}
+.pill .dot { width:6px; height:6px; border-radius:50%; background:var(--green); }
+.pill .dot.blink { animation: blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+#clock { font-size:12px; color:var(--text-dim); font-family:var(--mono); }
 
-        .header-title h1 {
-            font-size: 28px;
-            font-weight: 600;
-            background: linear-gradient(135deg, #fff 0%, #b0e0ff 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 5px;
-        }
+/* ─── TABS ─── */
+.tabs {
+  display:flex; gap:2px; margin-bottom:24px;
+  background:var(--bg2); padding:4px; border-radius:var(--radius);
+  border:1px solid var(--border); width:fit-content;
+}
+.tab {
+  padding:8px 20px; border-radius:9px;
+  font-family:var(--sans); font-size:13px; font-weight:500;
+  cursor:pointer; border:none; background:transparent;
+  color:var(--text-dim); transition:all .2s;
+}
+.tab.active { background:var(--cyan-dim); color:var(--cyan); border:1px solid var(--border2); }
+.tab:hover:not(.active) { color:var(--text); }
 
-        .header-title .subtitle {
-            color: #8a9db0;
-            font-size: 14px;
-            font-weight: 400;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
 
-        .header-title .subtitle i {
-            font-size: 12px;
-            color: #4cd964;
-        }
+/* ─── SECTION LABEL ─── */
+.section-label {
+  font-size:10px; letter-spacing:0.16em; text-transform:uppercase;
+  color:var(--text-muted); font-family:var(--sans); font-weight:600;
+  margin-bottom:12px; display:flex; align-items:center; gap:8px;
+}
+.section-label::after { content:''; flex:1; height:1px; background:var(--border); }
 
-        .header-right {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
+/* ─── STATS ROW ─── */
+.stats-row {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:14px; margin-bottom:24px;
+}
+.stat {
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:var(--radius); padding:16px 20px;
+  display:flex; align-items:center; gap:14px;
+  transition:border-color .2s;
+}
+.stat:hover { border-color:var(--border2); }
+.stat-icon { font-size:20px; color:var(--cyan); opacity:0.8; width:32px; text-align:center; }
+.stat-body .label { font-size:10px; color:var(--text-muted); letter-spacing:0.1em; text-transform:uppercase; font-family:var(--sans); }
+.stat-body .value { font-size:22px; font-weight:600; color:#fff; margin-top:2px; font-family:var(--sans); }
+.stat-body .sub { font-size:11px; color:var(--green); margin-top:2px; }
 
-        .status-badge {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 10px 20px;
-            border-radius: 40px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 14px;
-        }
+/* ─── MAIN GRID ─── */
+.main-grid {
+  display:grid; grid-template-columns:380px 1fr;
+  gap:20px; align-items:start;
+}
+@media(max-width:900px) { .main-grid { grid-template-columns:1fr; } }
 
-        .status-badge i {
-            color: #4cd964;
-            animation: pulse 2s infinite;
-        }
+/* ─── PANEL ─── */
+.panel {
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:20px;
+}
+.panel-title {
+  font-family:var(--sans); font-size:14px; font-weight:600;
+  color:#fff; margin-bottom:16px;
+  display:flex; align-items:center; gap:8px;
+}
+.panel-title i { color:var(--cyan); font-size:14px; }
 
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
+/* ─── TARGET INPUT (F1) ─── */
+.input-group { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+.input-row { display:flex; gap:8px; }
+.inp {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:8px; padding:10px 14px;
+  font-family:var(--mono); font-size:13px; color:#fff;
+  outline:none; transition:border-color .2s; width:100%;
+}
+.inp:focus { border-color:var(--cyan); box-shadow:0 0 0 3px rgba(0,210,255,0.08); }
+.inp::placeholder { color:var(--text-muted); }
+.inp-sm { width:90px; flex-shrink:0; }
 
-        .time-display {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 10px 20px;
-            border-radius: 40px;
-            font-size: 14px;
-            font-weight: 500;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
+.proto-row { display:flex; gap:6px; flex-wrap:wrap; }
+.proto-btn {
+  padding:6px 12px; border-radius:6px;
+  font-size:11px; font-family:var(--mono); cursor:pointer;
+  border:1px solid var(--border); background:transparent;
+  color:var(--text-dim); transition:all .15s;
+}
+.proto-btn.active, .proto-btn:hover { background:var(--cyan-dim); color:var(--cyan); border-color:var(--border2); }
 
-        /* Stats Overview */
-        .stats-overview {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
+.btn-run {
+  width:100%; padding:11px; border-radius:8px;
+  background:var(--cyan); color:#000; font-family:var(--sans);
+  font-size:13px; font-weight:700; border:none; cursor:pointer;
+  letter-spacing:0.05em; transition:all .2s;
+}
+.btn-run:hover { background:#33daff; box-shadow:0 0 20px var(--cyan-glow); }
+.btn-run:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-run.running { background:var(--amber); color:#000; }
 
-        .stat-card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px;
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            transition: all 0.3s ease;
-        }
+.divider { height:1px; background:var(--border); margin:16px 0; }
 
-        .stat-card:hover {
-            background: rgba(255, 255, 255, 0.08);
-            transform: translateY(-2px);
-            border-color: rgba(0, 210, 255, 0.3);
-        }
+/* target list */
+.target-list { display:flex; flex-direction:column; gap:8px; max-height:320px; overflow-y:auto; }
+.target-item {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:8px; padding:10px 14px;
+  display:flex; align-items:center; gap:10px;
+  font-size:12px; cursor:pointer; transition:border-color .2s;
+  position:relative;
+}
+.target-item:hover { border-color:var(--border2); }
+.target-item.selected { border-color:var(--cyan); background:var(--cyan-dim); }
+.target-item .t-host { color:#fff; font-weight:500; flex:1; }
+.target-item .t-port { color:var(--text-dim); }
+.target-item .t-status { margin-left:auto; }
+.target-item .del {
+  color:var(--text-muted); font-size:10px; cursor:pointer;
+  padding:2px 4px; border-radius:4px; transition:color .15s;
+}
+.target-item .del:hover { color:var(--red); }
 
-        .stat-icon {
-            width: 55px;
-            height: 55px;
-            background: linear-gradient(135deg, #00d2ff20 0%, #3a7bd520 100%);
-            border-radius: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            color: #00d2ff;
-        }
+/* status badges */
+.status { display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:3px 9px; border-radius:20px; font-weight:500; }
+.status.pass  { background:var(--green-dim); color:var(--green); }
+.status.fail  { background:var(--red-dim);   color:var(--red); }
+.status.warn  { background:var(--amber-dim); color:var(--amber); }
+.status.idle  { background:rgba(255,255,255,0.05); color:var(--text-dim); }
+.status.testing { background:var(--cyan-dim); color:var(--cyan); animation:pulse 1.2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 
-        .stat-content h3 {
-            font-size: 14px;
-            font-weight: 400;
-            color: #8a9db0;
-            margin-bottom: 5px;
-        }
+/* ─── RIGHT COLUMN ─── */
+.right-col { display:flex; flex-direction:column; gap:20px; }
 
-        .stat-content .stat-value {
-            font-size: 28px;
-            font-weight: 600;
-            color: white;
-            line-height: 1.2;
-        }
+/* ─── PORT CARDS (F2) ─── */
+.port-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+  gap:12px;
+}
+.port-card {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:var(--radius); padding:14px 16px;
+  transition:all .2s; cursor:default;
+}
+.port-card:hover { border-color:var(--border2); transform:translateY(-1px); }
+.port-card.pass { border-left:3px solid var(--green); }
+.port-card.fail { border-left:3px solid var(--red); }
+.port-card.warn { border-left:3px solid var(--amber); }
+.port-card.idle { border-left:3px solid var(--text-muted); }
+.port-card.testing { border-left:3px solid var(--cyan); }
 
-        .stat-content .stat-label {
-            font-size: 12px;
-            color: #4cd964;
-            margin-top: 5px;
-        }
+.pc-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.pc-proto { font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-muted); font-family:var(--sans); }
+.pc-port { font-size:11px; color:var(--text-dim); font-family:var(--mono); }
+.pc-name { font-size:14px; font-weight:600; color:#fff; font-family:var(--sans); margin-bottom:4px; }
+.pc-meta { font-size:11px; color:var(--text-dim); margin-bottom:10px; }
+.pc-latency { font-size:20px; font-weight:600; font-family:var(--mono); }
+.pc-latency.pass { color:var(--green); }
+.pc-latency.fail { color:var(--red); }
+.pc-latency.idle { color:var(--text-muted); }
+.pc-latency.testing { color:var(--cyan); }
+.pc-updated { font-size:10px; color:var(--text-muted); margin-top:4px; }
 
-        /* Main Dashboard Grid */
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 25px;
-            margin-bottom: 30px;
-        }
+/* ─── TLS INSPECTOR (F3) ─── */
+.tls-panel { }
+.tls-grade {
+  display:flex; align-items:center; gap:16px; margin-bottom:16px;
+  padding:14px 16px; background:var(--bg); border-radius:10px;
+  border:1px solid var(--border);
+}
+.grade-box {
+  width:52px; height:52px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:24px; font-weight:800; font-family:var(--sans);
+  flex-shrink:0;
+}
+.grade-box.A { background:rgba(0,230,118,0.15); color:var(--green); border:1px solid rgba(0,230,118,0.3); }
+.grade-box.B { background:rgba(255,179,0,0.15);  color:var(--amber); border:1px solid rgba(255,179,0,0.3); }
+.grade-box.C { background:rgba(255,75,75,0.15);   color:var(--red);   border:1px solid rgba(255,75,75,0.3); }
+.grade-box.N { background:rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid var(--border); }
+.grade-detail h3 { font-family:var(--sans); font-size:14px; font-weight:600; color:#fff; margin-bottom:3px; }
+.grade-detail p { font-size:11px; color:var(--text-dim); }
 
-        .grid-card {
-            background: rgba(20, 30, 40, 0.6);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 28px;
-            padding: 25px;
-            transition: all 0.3s ease;
-        }
+.kv-list { display:flex; flex-direction:column; gap:0; }
+.kv {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:9px 0; border-bottom:1px solid var(--border); font-size:12px;
+}
+.kv:last-child { border-bottom:none; }
+.kv .k { color:var(--text-dim); }
+.kv .v { color:#fff; font-weight:500; text-align:right; max-width:200px; word-break:break-all; }
+.kv .v.good { color:var(--green); }
+.kv .v.warn { color:var(--amber); }
+.kv .v.bad  { color:var(--red); }
 
-        .grid-card:hover {
-            border-color: rgba(0, 210, 255, 0.2);
-            box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.5);
-        }
+.cert-chain { margin-top:12px; }
+.chain-node {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 12px; background:var(--bg); border-radius:8px;
+  margin-bottom:6px; border:1px solid var(--border); font-size:11px;
+}
+.chain-node .cn-type { color:var(--text-muted); font-family:var(--sans); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; width:80px; flex-shrink:0; }
+.chain-node .cn-name { color:#fff; flex:1; }
+.chain-node .cn-exp { color:var(--text-dim); margin-left:auto; white-space:nowrap; }
+.chain-arrow { color:var(--text-muted); font-size:10px; padding-left:16px; margin-bottom:2px; }
 
-        .card-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
+/* ─── DNS PANEL (F4) ─── */
+.dns-result {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:10px; padding:14px;
+}
+.dns-stage {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 0; border-bottom:1px solid var(--border); font-size:12px;
+}
+.dns-stage:last-child { border-bottom:none; }
+.stage-icon { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; flex-shrink:0; }
+.stage-icon.pass { background:var(--green-dim); color:var(--green); }
+.stage-icon.fail { background:var(--red-dim);   color:var(--red); }
+.stage-icon.idle { background:rgba(255,255,255,0.05); color:var(--text-muted); }
+.stage-label { color:var(--text-dim); width:100px; }
+.stage-val { color:#fff; flex:1; }
+.stage-time { color:var(--text-muted); font-size:10px; margin-left:auto; }
 
-        .card-header i {
-            font-size: 24px;
-            color: #00d2ff;
-            background: rgba(0, 210, 255, 0.1);
-            padding: 10px;
-            border-radius: 14px;
-        }
+.split-brain-warn {
+  margin-top:10px; padding:10px 12px;
+  background:var(--amber-dim); border:1px solid rgba(255,179,0,0.3);
+  border-radius:8px; font-size:11px; color:var(--amber);
+  display:flex; align-items:center; gap:8px;
+}
+.ip-tag {
+  display:inline-block; padding:2px 8px; border-radius:4px;
+  background:var(--cyan-dim); color:var(--cyan);
+  font-size:11px; margin:2px 4px 2px 0;
+  border:1px solid rgba(0,210,255,0.2);
+}
+.ip-tag.private { background:var(--green-dim); color:var(--green); border-color:rgba(0,230,118,0.2); }
+.ip-tag.public  { background:var(--amber-dim); color:var(--amber); border-color:rgba(255,179,0,0.2); }
 
-        .card-header h2 {
-            font-size: 18px;
-            font-weight: 500;
-            color: white;
-        }
+/* ─── TEST LOG (F5) ─── */
+.log-table { width:100%; border-collapse:collapse; font-size:11px; }
+.log-table th { text-align:left; padding:8px 12px; color:var(--text-muted); font-weight:500; letter-spacing:0.06em; text-transform:uppercase; border-bottom:1px solid var(--border); font-size:10px; font-family:var(--sans); }
+.log-table td { padding:9px 12px; border-bottom:1px solid rgba(0,210,255,0.06); color:var(--text); vertical-align:middle; }
+.log-table tr:last-child td { border-bottom:none; }
+.log-table tr:hover td { background:rgba(0,210,255,0.03); }
+.log-wrap { max-height:280px; overflow-y:auto; }
+.log-actions { display:flex; gap:8px; margin-top:12px; }
+.btn-sm {
+  padding:7px 14px; border-radius:7px; font-size:12px; font-family:var(--sans);
+  font-weight:600; cursor:pointer; border:1px solid var(--border);
+  background:transparent; color:var(--text-dim); transition:all .15s;
+}
+.btn-sm:hover { color:#fff; border-color:var(--border2); }
+.btn-sm.danger:hover { color:var(--red); border-color:rgba(255,75,75,0.4); }
 
-        .card-content {
-            color: #cbd5e0;
-        }
+/* ─── LEGACY TLS panel ─── */
+.tls-proto-row {
+  display:flex; align-items:center; gap:8px; padding:8px 0;
+  border-bottom:1px solid var(--border); font-size:12px;
+}
+.tls-proto-row:last-child { border-bottom:none; }
+.tls-proto-name { width:80px; color:var(--text-dim); }
+.tls-proto-bar { flex:1; height:4px; background:rgba(255,255,255,0.05); border-radius:2px; }
+.tls-proto-bar .fill { height:100%; border-radius:2px; }
+.fill.enabled { background:var(--green); }
+.fill.disabled { background:var(--text-muted); width:0 !important; }
+.fill.critical { background:var(--red); }
+.fill.warn { background:var(--amber); }
+.tls-proto-flag { font-size:10px; padding:2px 7px; border-radius:4px; }
 
-        /* Status Indicators */
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 16px;
-            margin-bottom: 15px;
-        }
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
-        .status-badge.success {
-            background: rgba(76, 217, 100, 0.15);
-            color: #4cd964;
-            padding: 6px 12px;
-            border-radius: 40px;
-            font-size: 13px;
-            font-weight: 500;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
+/* ─── EMPTY STATE ─── */
+.empty {
+  text-align:center; padding:40px 20px; color:var(--text-muted);
+  font-size:12px;
+}
+.empty i { font-size:28px; display:block; margin-bottom:12px; opacity:0.4; }
 
-        .status-badge.info {
-            background: rgba(0, 210, 255, 0.15);
-            color: #00d2ff;
-        }
+/* ─── FOOTER ─── */
+.footer {
+  margin-top:40px; padding-top:20px;
+  border-top:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:11px; color:var(--text-muted); flex-wrap:wrap; gap:12px;
+}
+.footer a { color:var(--text-muted); text-decoration:none; }
+.footer a:hover { color:var(--cyan); }
 
-        .metric-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .metric-label {
-            color: #8a9db0;
-            font-size: 14px;
-        }
-
-        .metric-value {
-            font-weight: 600;
-            color: white;
-        }
-
-        .metric-value.highlight {
-            color: #00d2ff;
-        }
-
-        /* Weather Widget Customization */
-        .weather-container {
-            background: linear-gradient(135deg, rgba(0, 100, 150, 0.2), rgba(0, 50, 100, 0.2));
-            border-radius: 20px;
-            padding: 15px;
-        }
-
-        .weatherwidget-io {
-            border-radius: 16px !important;
-            overflow: hidden;
-        }
-
-        /* System Health */
-        .health-bar {
-            height: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            margin: 15px 0;
-            overflow: hidden;
-        }
-
-        .health-fill {
-            height: 100%;
-            width: 85%;
-            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
-            border-radius: 10px;
-            animation: glow 2s ease-in-out infinite alternate;
-        }
-
-        @keyframes glow {
-            from { opacity: 0.8; }
-            to { opacity: 1; }
-        }
-
-        /* Activity List */
-        .activity-list {
-            margin-top: 20px;
-        }
-
-        .activity-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .activity-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #4cd964;
-        }
-
-        .activity-dot.warning {
-            background: #ffd534;
-        }
-
-        /* Footer */
-        .footer {
-            margin-top: 50px;
-            padding-top: 30px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            color: #8a9db0;
-            font-size: 14px;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-
-        .footer-links {
-            display: flex;
-            gap: 25px;
-        }
-
-        .footer-links a {
-            color: #8a9db0;
-            text-decoration: none;
-            transition: color 0.3s;
-        }
-
-        .footer-links a:hover {
-            color: #00d2ff;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 900px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            .header-right {
-                width: 100%;
-                justify-content: space-between;
-            }
-        }
-
-        @media (max-width: 600px) {
-            .stats-overview {
-                grid-template-columns: 1fr;
-            }
-            
-            .header-right {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .time-display, .status-badge {
-                text-align: center;
-            }
-        }
-    </style>
+/* ─── RESPONSIVE ─── */
+@media(max-width:640px) {
+  .wrap { padding:16px; }
+  .port-grid { grid-template-columns:1fr 1fr; }
+  .tabs .tab { padding:8px 12px; font-size:12px; }
+}
+</style>
 </head>
 <body>
+<div class="wrap">
 
-<div class="container">
-    <!-- Header -->
-    <div class="header">
-        <div class="header-left">
-            <div class="logo-icon">
-                <i class="fas fa-cloud"></i>
-            </div>
-            <div class="header-title">
-                <h1>AzureSphere Dashboard</h1>
-                <div class="subtitle">
-                    <i class="fas fa-circle"></i>
-                    Azure VM • Server Monitoring • Live
-                </div>
-            </div>
-        </div>
-        
-        <div class="header-right">
-            <div class="status-badge">
-                <i class="fas fa-shield-alt"></i>
-                <span>All Systems Operational</span>
-            </div>
-            <div class="time-display" id="liveTime">
-                <i class="far fa-clock"></i>
-                <span></span>
-            </div>
-        </div>
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">
+    <div class="logo-mark"><i class="fas fa-globe"></i></div>
+    <div class="logo-text">
+      <h1>AzureSphere</h1>
+      <div class="sub">Digital Twin · Enterprise Connectivity Diagnostic</div>
     </div>
-
-    <!-- Stats Overview -->
-    <div class="stats-overview">
-        <div class="stat-card">
-            <div class="stat-icon">
-                <i class="fas fa-server"></i>
-            </div>
-            <div class="stat-content">
-                <h3>Server Uptime</h3>
-                <div class="stat-value" id="uptime">24d 13h</div>
-                <div class="stat-label">98.9% Availability</div>
-            </div>
-        </div>
-        
-        <div class="stat-card">
-            <div class="stat-icon">
-                <i class="fas fa-network-wired"></i>
-            </div>
-            <div class="stat-content">
-                <h3>Active Connections</h3>
-                <div class="stat-value" id="totalConnections">157</div>
-                <div class="stat-label">↑ 12% from yesterday</div>
-            </div>
-        </div>
-        
-        <div class="stat-card">
-            <div class="stat-icon">
-                <i class="fas fa-database"></i>
-            </div>
-            <div class="stat-content">
-                <h3>Data Transferred</h3>
-                <div class="stat-value">2.4 GB</div>
-                <div class="stat-label">Last 24 hours</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Dashboard Grid -->
-    <div class="dashboard-grid">
-        <!-- HTTPS Status Card -->
-        <div class="grid-card">
-            <div class="card-header">
-                <i class="fas fa-lock"></i>
-                <h2>HTTPS Security Status</h2>
-            </div>
-            <div class="card-content">
-                <div class="status-indicator">
-                    <span class="status-badge success">
-                        <i class="fas fa-check-circle"></i> Port 443 Active
-                    </span>
-                    <span style="margin-left: auto; font-size: 13px;">SSL/TLS 1.3</span>
-                </div>
-                
-                <div class="metric-row">
-                    <span class="metric-label"><i class="fas fa-globe"></i> Server IP</span>
-                    <span class="metric-value highlight">20.11.10.72</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label"><i class="fas fa-certificate"></i> SSL Certificate</span>
-                    <span class="metric-value">Valid (90 days)</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label"><i class="fas fa-shield-virus"></i> Security Rating</span>
-                    <span class="metric-value" style="color: #4cd964;">A+</span>
-                </div>
-                
-                <div class="health-bar">
-                    <div class="health-fill" style="width: 100%;"></div>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #8a9db0;">
-                    <span>Security Score</span>
-                    <span>Excellent</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- HTTP Traffic Card -->
-        <div class="grid-card">
-            <div class="card-header">
-                <i class="fas fa-chart-line"></i>
-                <h2>HTTP Traffic Analytics</h2>
-            </div>
-            <div class="card-content">
-                <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-                    <div style="flex: 1; text-align: center; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 16px;">
-                        <div style="font-size: 28px; font-weight: 700; color: #00d2ff;" id="requests">--</div>
-                        <div style="font-size: 12px; color: #8a9db0;">Total Requests</div>
-                    </div>
-                    <div style="flex: 1; text-align: center; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 16px;">
-                        <div style="font-size: 28px; font-weight: 700; color: #4cd964;" id="connections">--</div>
-                        <div style="font-size: 12px; color: #8a9db0;">Active Connections</div>
-                    </div>
-                </div>
-                
-                <div class="metric-row">
-                    <span class="metric-label">Requests/min</span>
-                    <span class="metric-value" id="requestsPerMin">342</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">Bandwidth Usage</span>
-                    <span class="metric-value">45 Mbps</span>
-                </div>
-                
-                <div class="activity-list">
-                    <div class="activity-item">
-                        <span class="activity-dot"></span>
-                        <span style="flex: 1;">GET /api/status</span>
-                        <span style="color: #8a9db0;">2s ago</span>
-                    </div>
-                    <div class="activity-item">
-                        <span class="activity-dot warning"></span>
-                        <span style="flex: 1;">POST /auth/login</span>
-                        <span style="color: #8a9db0;">5s ago</span>
-                    </div>
-                </div>
-                
-                <p style="font-size: 12px; color: #8a9db0; margin-top: 15px;">
-                    <i class="fas fa-info-circle"></i> Nginx stub_status enabled
-                </p>
-            </div>
-        </div>
-
-        <!-- SFTP Service Card -->
-        <div class="grid-card">
-            <div class="card-header">
-                <i class="fas fa-folder"></i>
-                <h2>SFTP File Transfer</h2>
-            </div>
-            <div class="card-content">
-                <div class="status-indicator">
-                    <span class="status-badge success">
-                        <i class="fas fa-check-circle"></i> Port 2222 Active
-                    </span>
-                </div>
-                
-                <div class="metric-row">
-                    <span class="metric-label"><i class="fas fa-user"></i> Username</span>
-                    <span class="metric-value">testuser</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label"><i class="fas fa-folder-open"></i> Home Directory</span>
-                    <span class="metric-value">/home/testuser</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label"><i class="fas fa-key"></i> Auth Method</span>
-                    <span class="metric-value">Password & Key</span>
-                </div>
-                
-                <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 16px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span>Disk Usage</span>
-                        <span>2.4 GB / 20 GB</span>
-                    </div>
-                    <div class="health-bar">
-                        <div class="health-fill" style="width: 12%;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Weather Card -->
-        <div class="grid-card">
-            <div class="card-header">
-                <i class="fas fa-cloud-sun"></i>
-                <h2>Brisbane Weather</h2>
-            </div>
-            <div class="card-content">
-                <div class="weather-container">
-                    <a class="weatherwidget-io"
-                       href="https://forecast7.com/en/n27d47153d03/brisbane/"
-                       data-label_1="BRISBANE"
-                       data-label_2="WEATHER"
-                       data-theme="dark"
-                       data-basecolor="#1a2f3f"
-                       data-accent="#00d2ff">
-                    BRISBANE WEATHER
-                    </a>
-                </div>
-                
-                <div style="margin-top: 20px; display: flex; gap: 15px; justify-content: center;">
-                    <div style="text-align: center;">
-                        <i class="fas fa-wind"></i>
-                        <div style="font-size: 12px;">Wind</div>
-                        <div style="font-weight: 600;">12 km/h</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <i class="fas fa-tint"></i>
-                        <div style="font-size: 12px;">Humidity</div>
-                        <div style="font-weight: 600;">65%</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <i class="fas fa-compress-alt"></i>
-                        <div style="font-size: 12px;">Pressure</div>
-                        <div style="font-weight: 600;">1012 hPa</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer">
-        <div>© 2026 AzureSphere Connectivity Lab • Docker + Nginx + SFTP</div>
-        <div class="footer-links">
-            <a href="#"><i class="fab fa-github"></i></a>
-            <a href="#"><i class="fas fa-chart-bar"></i> Metrics</a>
-            <a href="#"><i class="fas fa-cog"></i> Settings</a>
-            <a href="#"><i class="fas fa-question-circle"></i> Help</a>
-        </div>
-    </div>
+  </div>
+  <div class="header-right">
+    <div class="pill"><span class="dot blink"></span> Agent Online</div>
+    <div class="pill"><i class="fas fa-server" style="font-size:10px;color:var(--cyan)"></i> <span id="vm-hostname">Loading...</span></div>
+    <div id="clock" class="pill"><i class="far fa-clock" style="font-size:10px"></i> --:--:--</div>
+  </div>
 </div>
 
+<!-- STATS ROW -->
+<div class="stats-row">
+  <div class="stat">
+    <div class="stat-icon"><i class="fas fa-network-wired"></i></div>
+    <div class="stat-body">
+      <div class="label">Targets Registered</div>
+      <div class="value" id="stat-targets">0</div>
+      <div class="sub" id="stat-targets-sub">Add a target below</div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+    <div class="stat-body">
+      <div class="label">Tests Passed</div>
+      <div class="value" id="stat-pass">0</div>
+      <div class="sub" id="stat-pass-sub">—</div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="stat-icon"><i class="fas fa-times-circle"></i></div>
+    <div class="stat-body">
+      <div class="label">Tests Failed</div>
+      <div class="value" id="stat-fail">0</div>
+      <div class="sub" id="stat-fail-sub" style="color:var(--red)">—</div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="stat-icon"><i class="fas fa-clock"></i></div>
+    <div class="stat-body">
+      <div class="label">Avg Latency</div>
+      <div class="value" id="stat-latency">—</div>
+      <div class="sub">ms avg RTT</div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="stat-icon"><i class="fas fa-certificate"></i></div>
+    <div class="stat-body">
+      <div class="label">Cert Expiry (min)</div>
+      <div class="value" id="stat-cert">—</div>
+      <div class="sub" id="stat-cert-sub">days remaining</div>
+    </div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('connectivity')">Connectivity</button>
+  <button class="tab" onclick="switchTab('tls')">TLS / Certs</button>
+  <button class="tab" onclick="switchTab('dns')">DNS</button>
+  <button class="tab" onclick="switchTab('log')">Test Log</button>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!--  TAB: CONNECTIVITY                            -->
+<!-- ══════════════════════════════════════════════ -->
+<div id="tab-connectivity" class="tab-content active">
+  <div class="main-grid">
+
+    <!-- LEFT: Target Input Panel (F1) -->
+    <div class="panel">
+      <div class="panel-title"><i class="fas fa-crosshairs"></i> Target Configuration</div>
+
+      <div class="section-label">Endpoint</div>
+      <div class="input-group">
+        <input class="inp" id="inp-host" placeholder="10.0.1.50 or app.corp.internal" type="text" />
+        <div class="input-row">
+          <input class="inp inp-sm" id="inp-port" placeholder="Port" type="number" value="443" />
+          <input class="inp" id="inp-label" placeholder="Label (e.g. SQL Server)" type="text" />
+        </div>
+      </div>
+
+      <div class="section-label">Protocol</div>
+      <div class="proto-row" id="proto-row">
+        <button class="proto-btn active" data-proto="HTTPS" onclick="selectProto(this)">HTTPS</button>
+        <button class="proto-btn" data-proto="SFTP" onclick="selectProto(this)">SFTP</button>
+        <button class="proto-btn" data-proto="SQL" onclick="selectProto(this)">SQL</button>
+        <button class="proto-btn" data-proto="RabbitMQ" onclick="selectProto(this)">RabbitMQ</button>
+        <button class="proto-btn" data-proto="SMB" onclick="selectProto(this)">SMB</button>
+        <button class="proto-btn" data-proto="HANA" onclick="selectProto(this)">SAP HANA</button>
+        <button class="proto-btn" data-proto="TCP" onclick="selectProto(this)">TCP</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <button class="btn-run" id="btn-run" onclick="addAndRun()">
+        <i class="fas fa-play"></i>&nbsp; Run Connectivity Test
+      </button>
+
+      <div class="divider"></div>
+      <div class="section-label">Registered Targets</div>
+      <div class="target-list" id="target-list">
+        <div class="empty" id="target-empty">
+          <i class="fas fa-server"></i>
+          No targets added yet.<br>Enter an IP or FQDN above.
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Port Status Cards (F2) -->
+    <div class="right-col">
+      <div>
+        <div class="section-label">Port Status — All Targets</div>
+        <div class="port-grid" id="port-grid">
+          <!-- populated by JS -->
+        </div>
+        <div class="empty" id="port-empty" style="display:none">
+          <i class="fas fa-plug"></i>
+          Run a test to see port status cards.
+        </div>
+      </div>
+
+      <!-- HTTPS details inline -->
+      <div class="panel" id="https-detail-panel" style="display:none">
+        <div class="panel-title"><i class="fas fa-lock"></i> HTTPS Response Detail</div>
+        <div class="kv-list" id="https-detail-kv"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!--  TAB: TLS / CERTS (F3)                       -->
+<!-- ══════════════════════════════════════════════ -->
+<div id="tab-tls" class="tab-content">
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-title"><i class="fas fa-shield-alt"></i> Run TLS Inspection</div>
+      <div class="section-label">Target</div>
+      <div class="input-group">
+        <input class="inp" id="tls-host" placeholder="host.corp.internal or 10.0.1.50" />
+        <input class="inp inp-sm" id="tls-port" placeholder="Port" value="443" type="number" />
+      </div>
+      <button class="btn-run" onclick="runTLSInspect()">
+        <i class="fas fa-search"></i>&nbsp; Inspect TLS / Certificate
+      </button>
+
+      <div class="divider"></div>
+      <div class="section-label">Legacy TLS Audit</div>
+      <div id="tls-legacy-result">
+        <div class="empty" style="padding:20px 0">
+          <i class="fas fa-history"></i>
+          Run inspection to see protocol support.
+        </div>
+      </div>
+    </div>
+
+    <div class="right-col">
+      <div class="panel tls-panel" id="tls-main-result">
+        <div class="panel-title"><i class="fas fa-certificate"></i> Certificate Inspector</div>
+        <div class="empty" id="tls-empty">
+          <i class="fas fa-certificate"></i>
+          No inspection run yet.<br>Enter a target and click Inspect.
+        </div>
+        <div id="tls-data" style="display:none">
+          <div class="tls-grade">
+            <div class="grade-box N" id="tls-grade-box">—</div>
+            <div class="grade-detail">
+              <h3 id="tls-grade-title">—</h3>
+              <p id="tls-grade-sub">—</p>
+            </div>
+          </div>
+          <div class="section-label">TLS Connection</div>
+          <div class="kv-list" id="tls-connection-kv"></div>
+          <div class="section-label" style="margin-top:16px">Certificate Details</div>
+          <div class="kv-list" id="tls-cert-kv"></div>
+          <div class="section-label" style="margin-top:16px">Certificate Chain</div>
+          <div class="cert-chain" id="cert-chain"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!--  TAB: DNS (F4)                               -->
+<!-- ══════════════════════════════════════════════ -->
+<div id="tab-dns" class="tab-content">
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-title"><i class="fas fa-search-location"></i> DNS Resolution Test</div>
+      <div class="section-label">FQDN to Resolve</div>
+      <div class="input-group">
+        <input class="inp" id="dns-host" placeholder="app.corp.internal or storage.blob.core.windows.net" />
+      </div>
+      <button class="btn-run" onclick="runDNS()">
+        <i class="fas fa-project-diagram"></i>&nbsp; Resolve &amp; Analyse
+      </button>
+
+      <div class="divider"></div>
+      <div class="section-label">ICMP Ping</div>
+      <div class="kv-list" id="ping-result">
+        <div class="empty" style="padding:10px 0"><i class="fas fa-satellite-dish"></i> Run DNS test to ping target.</div>
+      </div>
+    </div>
+
+    <div class="right-col">
+      <div class="panel">
+        <div class="panel-title"><i class="fas fa-sitemap"></i> Resolution Result</div>
+        <div class="empty" id="dns-empty">
+          <i class="fas fa-globe"></i>
+          Enter a hostname to begin DNS analysis.<br>
+          Split-brain DNS and private zone detection included.
+        </div>
+        <div id="dns-data" style="display:none">
+          <div class="dns-result">
+            <div class="dns-stage" id="dns-stage-1">
+              <div class="stage-icon idle" id="ds1-icon"><i class="fas fa-circle"></i></div>
+              <div class="stage-label">Stage 1 · DNS</div>
+              <div class="stage-val" id="ds1-val">—</div>
+              <div class="stage-time" id="ds1-time"></div>
+            </div>
+            <div class="dns-stage" id="dns-stage-2">
+              <div class="stage-icon idle" id="ds2-icon"><i class="fas fa-circle"></i></div>
+              <div class="stage-label">Stage 2 · TCP</div>
+              <div class="stage-val" id="ds2-val">—</div>
+              <div class="stage-time" id="ds2-time"></div>
+            </div>
+            <div class="dns-stage">
+              <div class="stage-icon idle" id="ds3-icon"><i class="fas fa-circle"></i></div>
+              <div class="stage-label">Stage 3 · Type</div>
+              <div class="stage-val" id="ds3-val">—</div>
+              <div class="stage-time"></div>
+            </div>
+          </div>
+
+          <div id="dns-ips" style="margin-top:14px">
+            <div class="section-label">Resolved IPs</div>
+            <div id="dns-ip-list"></div>
+          </div>
+
+          <div id="split-brain-alert" style="display:none" class="split-brain-warn">
+            <i class="fas fa-exclamation-triangle"></i>
+            <div><strong>Split-brain DNS detected.</strong> Multiple IPs resolved — mix of private and public addresses. Verify Azure Private DNS Zone configuration and Private Endpoint routing.</div>
+          </div>
+
+          <div class="section-label" style="margin-top:16px">Azure DNS Context</div>
+          <div class="kv-list" id="dns-context-kv"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!--  TAB: TEST LOG (F5)                           -->
+<!-- ══════════════════════════════════════════════ -->
+<div id="tab-log" class="tab-content">
+  <div class="panel">
+    <div class="panel-title"><i class="fas fa-list-alt"></i> Test History Log</div>
+    <div class="log-wrap">
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Target</th>
+            <th>Port</th>
+            <th>Protocol</th>
+            <th>Result</th>
+            <th>Latency</th>
+            <th>Detail</th>
+          </tr>
+        </thead>
+        <tbody id="log-body">
+          <tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted)">No tests run yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="log-actions">
+      <button class="btn-sm" onclick="exportLog()"><i class="fas fa-download"></i> Export JSON</button>
+      <button class="btn-sm danger" onclick="clearLog()"><i class="fas fa-trash"></i> Clear Log</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div>© 2026 AzureSphere · Digital Twin · Enterprise Connectivity Diagnostic</div>
+  <div style="display:flex;gap:20px">
+    <a href="https://github.com/HashimsGitHub/AzureSphere" target="_blank"><i class="fab fa-github"></i> GitHub</a>
+    <a href="https://github.com/HashimsGitHub/SSL-CheckTool" target="_blank"><i class="fas fa-shield-alt"></i> SSL-CheckTool</a>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
 <script>
-// Enhanced Live Data Simulation
-function updateDashboard() {
-    // Traffic stats
-    const requests = Math.floor(Math.random() * 8500) + 1500;
-    const connections = Math.floor(Math.random() * 350) + 50;
-    
-    document.getElementById("requests").innerText = requests.toLocaleString();
-    document.getElementById("connections").innerText = connections;
-    document.getElementById("totalConnections").innerText = connections;
-    document.getElementById("requestsPerMin").innerText = Math.floor(Math.random() * 500) + 200;
-    
-    // Uptime calculation (simulated)
-    const uptimeDays = Math.floor(Math.random() * 30) + 15;
-    const uptimeHours = Math.floor(Math.random() * 24);
-    document.getElementById("uptime").innerText = `${uptimeDays}d ${uptimeHours}h`;
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+let targets = [];           // {id, host, port, proto, label, status, latency, lastRun}
+let testLog  = [];          // {ts, host, port, proto, result, latency, detail}
+let selectedTarget = null;
+let selectedProto  = 'HTTPS';
+let tlsResult = null;
+let dnsResult = null;
+
+const PROTO_PORTS = {
+  HTTPS: 443, SFTP: 22, SQL: 1433,
+  RabbitMQ: 5672, SMB: 445, HANA: 30015, TCP: 80
+};
+
+// ══════════════════════════════════════════════
+//  CLOCK + HOSTNAME
+// ══════════════════════════════════════════════
+function tick() {
+  const now = new Date();
+  document.getElementById('clock').innerHTML =
+    `<i class="far fa-clock" style="font-size:10px"></i> ` +
+    now.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) +
+    ` &nbsp; ${now.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'})}`;
+}
+tick(); setInterval(tick, 1000);
+
+// simulate VM hostname detection
+document.getElementById('vm-hostname').textContent =
+  window.location.hostname || 'vm-azuresphere-01';
+
+// ══════════════════════════════════════════════
+//  TABS
+// ══════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const tabs = ['connectivity','tls','dns','log'];
+    t.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
 }
 
-// Live clock
-function updateClock() {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true 
-    });
-    const dateString = now.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        year: 'numeric'
-    });
-    document.querySelector('#liveTime span').innerText = `${dateString} ${timeString}`;
+// ══════════════════════════════════════════════
+//  PROTO SELECTOR
+// ══════════════════════════════════════════════
+function selectProto(btn) {
+  document.querySelectorAll('.proto-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedProto = btn.dataset.proto;
+  const portMap = PROTO_PORTS[selectedProto];
+  if (portMap) document.getElementById('inp-port').value = portMap;
 }
 
-// Initialize
-updateDashboard();
-updateClock();
+// ══════════════════════════════════════════════
+//  ADD TARGET + RUN TEST (F1)
+// ══════════════════════════════════════════════
+function addAndRun() {
+  const host  = document.getElementById('inp-host').value.trim();
+  const port  = parseInt(document.getElementById('inp-port').value) || 443;
+  const label = document.getElementById('inp-label').value.trim() || selectedProto;
+  if (!host) { document.getElementById('inp-host').focus(); return; }
 
-// Weather widget script
-!function(d,s,id){
-    var js,fjs=d.getElementsByTagName(s)[0];
-    if(!d.getElementById(id)){
-        js=d.createElement(s);js.id=id;
-        js.src='https://weatherwidget.io/js/widget.min.js';
-        fjs.parentNode.insertBefore(js,fjs);
+  // check if target already exists
+  let target = targets.find(t => t.host === host && t.port === port && t.proto === selectedProto);
+  if (!target) {
+    target = { id: Date.now(), host, port, proto: selectedProto, label, status:'testing', latency:null, lastRun:null };
+    targets.push(target);
+  } else {
+    target.status = 'testing';
+  }
+
+  renderTargetList();
+  renderPortCards();
+  updateStats();
+
+  // simulate async test
+  const btn = document.getElementById('btn-run');
+  btn.disabled = true; btn.classList.add('running');
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>&nbsp; Testing...';
+
+  simulateTest(target, () => {
+    renderTargetList();
+    renderPortCards();
+    updateStats();
+    addToLog(target);
+    btn.disabled = false; btn.classList.remove('running');
+    btn.innerHTML = '<i class="fas fa-play"></i>&nbsp; Run Connectivity Test';
+    // auto-show TLS/DNS detail for HTTPS
+    if (target.proto === 'HTTPS' && target.status === 'pass') {
+      showHTTPSDetail(target);
     }
-}(document,'script','weatherwidget-io-js');
+  });
+}
 
-// Auto-refresh data every 10 seconds
-setInterval(updateDashboard, 10000);
-setInterval(updateClock, 1000);
+// ── Simulated test engine (replace with Go backend calls when agent is live) ──
+function simulateTest(target, cb) {
+  const delay = 600 + Math.random() * 1200;
+  setTimeout(() => {
+    const r = Math.random();
+    // HTTPS and TCP mostly pass; others random
+    let pass;
+    if (target.proto === 'HTTPS' || target.proto === 'TCP') {
+      pass = r > 0.15;
+    } else {
+      pass = r > 0.3;
+    }
+    target.status  = pass ? 'pass' : 'fail';
+    target.latency = pass ? Math.floor(Math.random() * 180 + 8) : null;
+    target.lastRun = new Date();
+    // TLS data for HTTPS
+    if (target.proto === 'HTTPS' && pass) {
+      target.tlsData = generateSimTLSData(target.host);
+    }
+    cb();
+  }, delay);
+}
+
+// ══════════════════════════════════════════════
+//  RENDER TARGET LIST
+// ══════════════════════════════════════════════
+function renderTargetList() {
+  const el = document.getElementById('target-list');
+  const empty = document.getElementById('target-empty');
+  if (targets.length === 0) { empty.style.display=''; el.innerHTML=''; el.appendChild(empty); return; }
+  empty.style.display = 'none';
+  el.innerHTML = '';
+  targets.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'target-item' + (selectedTarget===t.id ? ' selected' : '');
+    div.innerHTML = `
+      <span class="t-host">${t.host}</span>
+      <span class="t-port">:${t.port}</span>
+      <span class="t-status">${statusBadge(t.status)}</span>
+      <span class="del" onclick="removeTarget(${t.id},event)" title="Remove"><i class="fas fa-times"></i></span>`;
+    div.onclick = (e) => { if (!e.target.closest('.del')) selectTarget(t.id); };
+    el.appendChild(div);
+  });
+}
+
+function selectTarget(id) {
+  selectedTarget = id;
+  renderTargetList();
+  const t = targets.find(x => x.id===id);
+  if (t && t.tlsData) showHTTPSDetail(t);
+}
+
+function removeTarget(id, e) {
+  e.stopPropagation();
+  targets = targets.filter(t => t.id !== id);
+  if (selectedTarget === id) selectedTarget = null;
+  renderTargetList();
+  renderPortCards();
+  updateStats();
+}
+
+// ══════════════════════════════════════════════
+//  PORT STATUS CARDS (F2)
+// ══════════════════════════════════════════════
+function renderPortCards() {
+  const grid = document.getElementById('port-grid');
+  const empty = document.getElementById('port-empty');
+  if (targets.length === 0) {
+    grid.innerHTML = ''; empty.style.display = 'none'; return;
+  }
+  empty.style.display = 'none';
+  grid.innerHTML = '';
+  targets.forEach(t => {
+    const card = document.createElement('div');
+    card.className = `port-card ${t.status}`;
+    const latencyDisp = t.status === 'testing' ? '<span class="pc-latency testing">···</span>' :
+      t.latency ? `<span class="pc-latency pass">${t.latency}ms</span>` :
+      `<span class="pc-latency fail">FAIL</span>`;
+    const lastStr = t.lastRun ? timeAgo(t.lastRun) : 'pending';
+    card.innerHTML = `
+      <div class="pc-top">
+        <span class="pc-proto">${t.proto}</span>
+        <span class="pc-port">:${t.port}</span>
+      </div>
+      <div class="pc-name">${t.label}</div>
+      <div class="pc-meta">${t.host}</div>
+      ${latencyDisp}
+      <div class="pc-updated">${statusBadge(t.status)} · ${lastStr}</div>`;
+    grid.appendChild(card);
+  });
+}
+
+function statusBadge(s) {
+  const map = {
+    pass:    '<span class="status pass"><i class="fas fa-check"></i> PASS</span>',
+    fail:    '<span class="status fail"><i class="fas fa-times"></i> FAIL</span>',
+    warn:    '<span class="status warn"><i class="fas fa-exclamation"></i> WARN</span>',
+    testing: '<span class="status testing"><i class="fas fa-circle-notch fa-spin"></i> Testing</span>',
+    idle:    '<span class="status idle">Idle</span>',
+  };
+  return map[s] || map.idle;
+}
+
+function timeAgo(d) {
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  return `${Math.floor(s/3600)}h ago`;
+}
+
+// ══════════════════════════════════════════════
+//  STATS
+// ══════════════════════════════════════════════
+function updateStats() {
+  const passed = targets.filter(t => t.status==='pass').length;
+  const failed = targets.filter(t => t.status==='fail').length;
+  const latencies = targets.filter(t => t.latency).map(t => t.latency);
+  const avgLat = latencies.length ? Math.round(latencies.reduce((a,b)=>a+b,0)/latencies.length) : null;
+
+  document.getElementById('stat-targets').textContent = targets.length;
+  document.getElementById('stat-targets-sub').textContent = targets.length===0 ? 'Add a target below' : `${targets.length} endpoint(s) monitored`;
+  document.getElementById('stat-pass').textContent = passed;
+  document.getElementById('stat-pass-sub').textContent = passed > 0 ? `${Math.round(passed/targets.length*100)}% success rate` : '—';
+  document.getElementById('stat-fail').textContent = failed;
+  document.getElementById('stat-fail-sub').textContent = failed > 0 ? `${failed} endpoint(s) unreachable` : '—';
+  document.getElementById('stat-latency').textContent = avgLat ? avgLat : '—';
+
+  // cert expiry from TLS results
+  if (tlsResult) {
+    document.getElementById('stat-cert').textContent = tlsResult.daysLeft;
+    document.getElementById('stat-cert-sub').textContent = tlsResult.daysLeft < 30 ? '⚠ Renew soon' : 'days remaining';
+  }
+}
+
+// ══════════════════════════════════════════════
+//  HTTPS DETAIL PANEL
+// ══════════════════════════════════════════════
+function showHTTPSDetail(t) {
+  const panel = document.getElementById('https-detail-panel');
+  const kv = document.getElementById('https-detail-kv');
+  panel.style.display = '';
+  kv.innerHTML = renderKV([
+    {k:'URL', v:`https://${t.host}:${t.port}`},
+    {k:'HTTP Status', v:'200 OK', cls:'good'},
+    {k:'Server Header', v:'nginx/1.26.1'},
+    {k:'Response Time', v: t.latency ? `${t.latency}ms` : '—'},
+    {k:'Content-Type', v:'text/html; charset=utf-8'},
+    {k:'Redirects', v:'None (direct)'},
+    {k:'HSTS', v:'max-age=31536000; includeSubDomains', cls:'good'},
+    {k:'X-Frame-Options', v:'SAMEORIGIN', cls:'good'},
+  ]);
+}
+
+// ══════════════════════════════════════════════
+//  TLS INSPECTION (F3) — simulated
+// ══════════════════════════════════════════════
+function generateSimTLSData(host) {
+  const daysLeft = Math.floor(Math.random() * 300 + 30);
+  const exp = new Date(Date.now() + daysLeft * 86400000);
+  const isInternal = !host.includes('.com') && !host.includes('.net');
+  return {
+    host, daysLeft,
+    tlsVersion: 'TLS 1.3',
+    cipher: 'TLS_AES_256_GCM_SHA384',
+    keySize: 2048,
+    keyType: 'RSA',
+    sigAlg: 'SHA-256 with RSA',
+    subject: `CN=${host}`,
+    issuer: isInternal ? 'CN=Corp-Internal-CA, O=Corp' : 'CN=DigiCert TLS RSA SHA256 2020 CA1',
+    thumbprint: Array.from({length:20},()=>Math.floor(Math.random()*256).toString(16).padStart(2,'0')).join(':'),
+    serial: Math.floor(Math.random()*1e15).toString(16).toUpperCase(),
+    expiry: exp.toDateString(),
+    trust: isInternal ? 'Private / Internal CA' : 'Publicly Trusted CA',
+    sni: host,
+    sans: [`${host}`, `*.${host.split('.').slice(1).join('.')}`],
+    chain: [
+      {type:'Leaf', name:`CN=${host}`, exp: exp.toDateString()},
+      {type:'Intermediate', name: isInternal ? 'CN=Corp-Internal-CA' : 'CN=DigiCert TLS RSA SHA256', exp:'2027-03-15'},
+      {type:'Root', name: isInternal ? 'CN=Corp-Root-CA, O=Corp' : 'CN=DigiCert Global Root CA', exp:'2031-11-10'},
+    ]
+  };
+}
+
+function runTLSInspect() {
+  const host = document.getElementById('tls-host').value.trim();
+  const port = document.getElementById('tls-port').value || '443';
+  if (!host) { document.getElementById('tls-host').focus(); return; }
+
+  document.getElementById('tls-empty').style.display = '';
+  document.getElementById('tls-empty').innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:28px;display:block;margin-bottom:12px;opacity:0.5"></i> Connecting to '+host+'...';
+  document.getElementById('tls-data').style.display = 'none';
+
+  setTimeout(() => {
+    tlsResult = generateSimTLSData(host);
+    renderTLSData(tlsResult);
+    renderLegacyTLS();
+    updateStats();
+  }, 900 + Math.random()*600);
+}
+
+function renderTLSData(d) {
+  document.getElementById('tls-empty').style.display = 'none';
+  document.getElementById('tls-data').style.display = '';
+
+  // grade
+  const gradeBox = document.getElementById('tls-grade-box');
+  let grade = 'A', gradeTitle = 'Strong security', gradeSub = 'TLS 1.3 · Strong cipher · Valid cert';
+  if (d.daysLeft < 30) { grade='B'; gradeTitle='Certificate expiring'; gradeSub=`Only ${d.daysLeft} days left — renew soon`; }
+  if (d.cipher.includes('RC4')||d.cipher.includes('DES')) { grade='C'; gradeTitle='Weak cipher'; gradeSub='RC4/DES in use — upgrade required'; }
+  gradeBox.textContent = grade;
+  gradeBox.className = `grade-box ${grade}`;
+  document.getElementById('tls-grade-title').textContent = gradeTitle;
+  document.getElementById('tls-grade-sub').textContent = gradeSub;
+
+  // connection
+  document.getElementById('tls-connection-kv').innerHTML = renderKV([
+    {k:'TLS Version', v:d.tlsVersion, cls: d.tlsVersion==='TLS 1.3'?'good':d.tlsVersion==='TLS 1.2'?'warn':'bad'},
+    {k:'Cipher Suite', v:d.cipher},
+    {k:'SNI Sent', v:d.sni},
+    {k:'Key Type', v:`${d.keyType} ${d.keySize}-bit`, cls: d.keySize>=2048?'good':'bad'},
+  ]);
+
+  // cert
+  const daysCls = d.daysLeft>90?'good':d.daysLeft>30?'warn':'bad';
+  document.getElementById('tls-cert-kv').innerHTML = renderKV([
+    {k:'Subject', v:d.subject},
+    {k:'Issuer', v:d.issuer},
+    {k:'Trust Type', v:d.trust},
+    {k:'Signature Alg', v:d.sigAlg, cls:d.sigAlg.includes('MD5')?'bad':d.sigAlg.includes('SHA-1')?'warn':'good'},
+    {k:'Expiry', v:d.expiry},
+    {k:'Days Remaining', v:`${d.daysLeft} days`, cls:daysCls},
+    {k:'SANs', v:d.sans.join(', ')},
+    {k:'Thumbprint', v:d.thumbprint.substring(0,29)+'…'},
+    {k:'Serial', v:d.serial},
+  ]);
+
+  // chain
+  const chainEl = document.getElementById('cert-chain');
+  chainEl.innerHTML = '';
+  d.chain.forEach((c,i) => {
+    if (i>0) chainEl.innerHTML += `<div class="chain-arrow"><i class="fas fa-arrow-up"></i> signs</div>`;
+    chainEl.innerHTML += `<div class="chain-node">
+      <span class="cn-type">${c.type}</span>
+      <span class="cn-name">${c.name}</span>
+      <span class="cn-exp">Exp ${c.exp}</span>
+    </div>`;
+  });
+}
+
+function renderLegacyTLS() {
+  const protos = [
+    {name:'SSL 2.0',  enabled:false, cls:'critical', flag:'Critical · DROWN'},
+    {name:'SSL 3.0',  enabled:false, cls:'critical', flag:'Critical · POODLE'},
+    {name:'TLS 1.0',  enabled:false, cls:'warn',     flag:'Deprecated'},
+    {name:'TLS 1.1',  enabled:false, cls:'warn',     flag:'Deprecated'},
+    {name:'TLS 1.2',  enabled:true,  cls:'enabled',  flag:'Accepted'},
+    {name:'TLS 1.3',  enabled:true,  cls:'enabled',  flag:'Preferred'},
+  ];
+  const el = document.getElementById('tls-legacy-result');
+  el.innerHTML = protos.map(p => `
+    <div class="tls-proto-row">
+      <span class="tls-proto-name">${p.name}</span>
+      <div class="tls-proto-bar"><div class="fill ${p.cls}" style="width:${p.enabled?'100%':'0%'}"></div></div>
+      <span class="tls-proto-flag status ${p.enabled?(p.cls==='enabled'?'pass':p.cls==='warn'?'warn':'fail'):'idle'}">${p.flag}</span>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════
+//  DNS RESOLUTION (F4) — simulated
+// ══════════════════════════════════════════════
+function runDNS() {
+  const host = document.getElementById('dns-host').value.trim();
+  if (!host) { document.getElementById('dns-host').focus(); return; }
+
+  document.getElementById('dns-empty').style.display = '';
+  document.getElementById('dns-empty').innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:24px;display:block;margin-bottom:10px;opacity:0.4"></i> Resolving...';
+  document.getElementById('dns-data').style.display = 'none';
+  document.getElementById('split-brain-alert').style.display = 'none';
+
+  setTimeout(() => {
+    const isAzure = host.includes('.azure.') || host.includes('.windows.net') || host.includes('.blob.') || host.includes('.servicebus.');
+    const isPrivate = !host.endsWith('.com') && !host.endsWith('.net') && !host.includes('blob') && !host.includes('azure');
+    // simulate IPs
+    let ips = [];
+    if (isPrivate) {
+      ips = [`10.${ri(0,15)}.${ri(0,255)}.${ri(2,254)}`];
+    } else if (isAzure) {
+      // might return public + private (simulating split-brain scenario)
+      ips = Math.random() > 0.4
+        ? [`10.${ri(0,15)}.${ri(0,255)}.${ri(2,254)}`]  // correct private endpoint
+        : [`10.${ri(0,15)}.${ri(0,255)}.${ri(2,254)}`, `${ri(20,50)}.${ri(10,200)}.${ri(10,200)}.${ri(10,200)}`]; // split-brain
+    } else {
+      ips = [`${ri(1,254)}.${ri(1,254)}.${ri(1,254)}.${ri(1,254)}`];
+    }
+
+    const resTime = ri(8,120);
+    const tcpTime = ri(12,250);
+    const splitBrain = ips.length > 1 && ips.some(ip => !ip.startsWith('10.') && !ip.startsWith('172.') && !ip.startsWith('192.168.'));
+
+    dnsResult = { host, ips, resTime, tcpTime, splitBrain, isAzure, isPrivate };
+    renderDNSData(dnsResult);
+    renderPing(ips[0]);
+  }, 600 + Math.random()*700);
+}
+
+function ri(a,b) { return Math.floor(Math.random()*(b-a+1))+a; }
+
+function isPrivateIP(ip) {
+  return ip.startsWith('10.') || ip.startsWith('172.') || ip.startsWith('192.168.');
+}
+
+function renderDNSData(d) {
+  document.getElementById('dns-empty').style.display = 'none';
+  document.getElementById('dns-data').style.display = '';
+
+  // stages
+  setStage('ds1', 'pass', `Resolved to ${d.ips.length} address(es)`, `${d.resTime}ms`);
+  setStage('ds2', 'pass', `TCP reachable`, `${d.tcpTime}ms`);
+  const type = d.isPrivate ? 'Private endpoint / Internal FQDN' : d.isAzure ? 'Azure service FQDN' : 'Public FQDN';
+  setStage('ds3', 'pass', type, '');
+
+  // IPs
+  const ipList = document.getElementById('dns-ip-list');
+  ipList.innerHTML = d.ips.map(ip => {
+    const priv = isPrivateIP(ip);
+    return `<span class="ip-tag ${priv?'private':'public'}" title="${priv?'Private IP (Azure VNet / RFC1918)':'Public IP — check Private Endpoint config'}">${ip} ${priv?'<i class="fas fa-lock"></i>':'<i class="fas fa-globe"></i>'}</span>`;
+  }).join('');
+
+  // split-brain
+  if (d.splitBrain) {
+    document.getElementById('split-brain-alert').style.display = 'flex';
+  }
+
+  // context
+  const azureCtx = [];
+  if (d.isAzure) azureCtx.push(
+    {k:'Azure Private DNS Zone', v: d.ips.every(isPrivateIP) ? 'Configured (private resolution)' : 'Not configured or bypassed', cls: d.ips.every(isPrivateIP)?'good':'bad'},
+    {k:'Private Endpoint', v: d.ips.some(isPrivateIP) ? 'Detected' : 'Not detected', cls: d.ips.some(isPrivateIP)?'good':'bad'},
+  );
+  azureCtx.push(
+    {k:'Split-Brain DNS', v: d.splitBrain ? '⚠ Detected — mixed private/public IPs' : 'Not detected', cls: d.splitBrain?'bad':'good'},
+    {k:'Resolution Time', v:`${d.resTime}ms`},
+    {k:'DNS Server', v: d.isPrivate ? '168.63.129.16 (Azure DNS)' : window.location.hostname || '10.0.0.1 (VNet DNS)'},
+  );
+  document.getElementById('dns-context-kv').innerHTML = renderKV(azureCtx);
+}
+
+function setStage(id, status, val, time) {
+  document.getElementById(id+'-icon').className = `stage-icon ${status}`;
+  document.getElementById(id+'-icon').innerHTML = status==='pass'?'<i class="fas fa-check"></i>':'<i class="fas fa-times"></i>';
+  document.getElementById(id+'-val').textContent = val;
+  if (document.getElementById(id+'-time')) document.getElementById(id+'-time').textContent = time;
+}
+
+function renderPing(ip) {
+  const times = Array.from({length:4}, () => ri(8,180));
+  const loss = Math.random() > 0.9 ? 25 : 0;
+  document.getElementById('ping-result').innerHTML = renderKV([
+    {k:'Target IP',     v: ip},
+    {k:'Packets Sent',  v:'4'},
+    {k:'Packet Loss',   v:`${loss}%`,  cls: loss>0?'bad':'good'},
+    {k:'Min RTT',       v:`${Math.min(...times)}ms`},
+    {k:'Avg RTT',       v:`${Math.round(times.reduce((a,b)=>a+b)/4)}ms`},
+    {k:'Max RTT',       v:`${Math.max(...times)}ms`},
+  ]);
+}
+
+// ══════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════
+function renderKV(pairs) {
+  return pairs.map(p => `
+    <div class="kv">
+      <span class="k">${p.k}</span>
+      <span class="v ${p.cls||''}">${p.v}</span>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════
+//  TEST LOG (F5)
+// ══════════════════════════════════════════════
+function addToLog(t) {
+  testLog.unshift({
+    ts: new Date().toISOString(),
+    host: t.host, port: t.port, proto: t.proto,
+    result: t.status, latency: t.latency,
+    detail: t.status==='pass' ? `Connected in ${t.latency}ms` : 'Connection refused / timeout'
+  });
+  renderLog();
+}
+
+function renderLog() {
+  const tbody = document.getElementById('log-body');
+  if (testLog.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted)">No tests run yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = testLog.map(r => `
+    <tr>
+      <td style="color:var(--text-muted)">${new Date(r.ts).toLocaleTimeString()}</td>
+      <td>${r.host}</td>
+      <td style="color:var(--cyan)">:${r.port}</td>
+      <td style="color:var(--text-dim)">${r.proto}</td>
+      <td>${statusBadge(r.result)}</td>
+      <td>${r.latency ? r.latency+'ms' : '—'}</td>
+      <td style="color:var(--text-muted);font-size:11px">${r.detail}</td>
+    </tr>`).join('');
+}
+
+function exportLog() {
+  const blob = new Blob([JSON.stringify(testLog, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `azuresphere-log-${Date.now()}.json`; a.click();
+}
+
+function clearLog() {
+  testLog = []; renderLog();
+}
+
+// init
+renderTargetList();
+renderPortCards();
+updateStats();
 </script>
-
 </body>
 </html>
