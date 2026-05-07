@@ -1,331 +1,118 @@
 #!/bin/bash
+set -e
 
-echo "Updating system..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  AzureSphere — Setup & Deploy"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+echo ""
+echo "[1/7] Updating system packages..."
 sudo apt update -y
 
-echo "Installing required packages..."
-sudo apt install -y docker.io docker-compose openssl git
+echo ""
+echo "[2/7] Installing dependencies..."
+sudo apt install -y docker.io docker-compose openssl git curl
 
-echo "Starting Docker..."
+echo ""
+echo "[3/7] Starting Docker..."
 sudo systemctl enable docker
 sudo systemctl start docker
 
-echo "Creating directory structure..."
+echo ""
+echo "[4/7] Creating directory structure..."
 mkdir -p nginx/conf
 mkdir -p nginx/certs
 mkdir -p nginx/html
 mkdir -p sftp/data
+mkdir -p agent
 
-echo "Creating Welcome HTML page..."
-cat <<EOF > nginx/html/index.html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AzureSphere | Server Connectivity Dashboard</title>
+echo ""
+echo "[5/7] Generating self-signed SSL certificate..."
+# Use a generic CN — works on any IP (public, private, or FQDN)
+# SAN covers localhost, all private RFC1918 ranges, and the wildcard
+HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+openssl req -x509 -nodes -days 825 \
+  -newkey rsa:2048 \
+  -keyout nginx/certs/server.key \
+  -out  nginx/certs/server.crt \
+  -subj "/CN=azuresphere-vm/O=AzureSphere/OU=DiagnosticAgent" \
+  -addext "subjectAltName=DNS:localhost,DNS:${HOSTNAME},IP:127.0.0.1"
 
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
+echo "   ✓ Certificate valid for 825 days — CN=azuresphere-vm"
+echo "   ✓ Hostname: ${HOSTNAME}"
 
-body{
-    font-family: Arial, Helvetica, sans-serif;
-    background: linear-gradient(135deg,#0b1721 0%,#1a2f3f 100%);
-    color:#e5e9f0;
-    min-height:100vh;
-    overflow-x:hidden;
-}
-
-body::before{
-    content:'';
-    position:fixed;
-    width:100%;
-    height:100%;
-    background-image:
-        radial-gradient(circle at 20% 30%,rgba(0,255,255,.05)0%,transparent 20%),
-        radial-gradient(circle at 80% 70%,rgba(0,200,255,.05)0%,transparent 20%);
-    pointer-events:none;
-}
-
-.container{max-width:1400px;margin:0 auto;padding:30px 24px}
-
-/* HEADER */
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;flex-wrap:wrap;gap:20px}
-.header-left{display:flex;align-items:center;gap:15px}
-
-.logo-icon{
-    width:50px;height:50px;
-    background:linear-gradient(135deg,#00d2ff 0%,#3a7bd5 100%);
-    border-radius:16px;
-    display:flex;align-items:center;justify-content:center;
-    font-size:22px;color:#fff
-}
-
-.header-title h1{
-    font-size:26px;font-weight:600;
-    background:linear-gradient(135deg,#fff 0%,#b0e0ff 100%);
-    -webkit-background-clip:text;
-    -webkit-text-fill-color:transparent;
-}
-
-.subtitle{color:#8a9db0;font-size:14px;margin-top:5px}
-
-.header-right{display:flex;gap:15px;align-items:center}
-
-.status-badge,.time-display{
-    background:rgba(255,255,255,.08);
-    padding:10px 18px;
-    border-radius:40px;
-    font-size:14px
-}
-
-.stats-overview{
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
-    gap:20px;margin-bottom:30px
-}
-
-.stat-card{
-    background:rgba(255,255,255,.05);
-    border-radius:24px;
-    padding:20px;
-    display:flex;align-items:center;gap:20px
-}
-
-.stat-icon{
-    width:55px;height:55px;
-    background:rgba(0,210,255,.15);
-    border-radius:18px;
-    display:flex;align-items:center;justify-content:center;
-    font-size:24px;color:#00d2ff
-}
-
-.stat-value{font-size:26px;font-weight:600}
-
-.dashboard-grid{
-    display:grid;
-    grid-template-columns:repeat(2,1fr);
-    gap:25px
-}
-
-.grid-card{
-    background:rgba(20,30,40,.6);
-    border-radius:28px;
-    padding:25px
-}
-
-.card-header{display:flex;align-items:center;gap:12px;margin-bottom:20px;font-size:18px}
-
-.metric-row{
-    display:flex;
-    justify-content:space-between;
-    padding:10px 0;
-    border-bottom:1px solid rgba(255,255,255,.05)
-}
-
-.health-bar{
-    height:8px;background:rgba(255,255,255,.1);
-    border-radius:10px;margin:15px 0;overflow:hidden
-}
-
-.health-fill{
-    height:100%;
-    background:linear-gradient(90deg,#00d2ff,#3a7bd5)
-}
-
-.footer{
-    margin-top:50px;
-    padding-top:20px;
-    border-top:1px solid rgba(255,255,255,.05);
-    font-size:14px;color:#8a9db0
-}
-
-@media(max-width:900px){
-.dashboard-grid{grid-template-columns:1fr}
-}
-</style>
-</head>
-
-<body>
-<div class="container">
-
-<div class="header">
-<div class="header-left">
-<div class="logo-icon">☁</div>
-<div class="header-title">
-<h1>AzureSphere Dashboard</h1>
-<div class="subtitle">● Azure VM • Server Monitoring • Live</div>
-</div>
-</div>
-
-<div class="header-right">
-<div class="status-badge">🛡 All Systems Operational</div>
-<div class="time-display" id="liveTime">--</div>
-</div>
-</div>
-
-<div class="stats-overview">
-
-<div class="stat-card">
-<div class="stat-icon">🖥</div>
-<div>
-<div>Server Uptime</div>
-<div class="stat-value" id="uptime">--</div>
-</div>
-</div>
-
-<div class="stat-card">
-<div class="stat-icon">🌐</div>
-<div>
-<div>Active Connections</div>
-<div class="stat-value" id="totalConnections">--</div>
-</div>
-</div>
-
-<div class="stat-card">
-<div class="stat-icon">💾</div>
-<div>
-<div>Data Transferred</div>
-<div class="stat-value">2.4 GB</div>
-</div>
-</div>
-
-</div>
-
-<div class="dashboard-grid">
-
-<div class="grid-card">
-<div class="card-header">🔒 HTTPS Security Status</div>
-<div class="metric-row"><span>Port</span><span>443 Active</span></div>
-<div class="metric-row"><span>Server IP</span><span>Your IP</span></div>
-<div class="metric-row"><span>SSL</span><span>Valid</span></div>
-<div class="health-bar"><div class="health-fill" style="width:100%"></div></div>
-</div>
-
-<div class="grid-card">
-<div class="card-header">📊 HTTP Traffic</div>
-<div class="metric-row"><span>Total Requests</span><span id="requests">--</span></div>
-<div class="metric-row"><span>Active Connections</span><span id="connections">--</span></div>
-</div>
-
-<div class="grid-card">
-<div class="card-header">📁 SFTP Service</div>
-<div class="metric-row"><span>Port</span><span>2222 Active</span></div>
-<div class="metric-row"><span>User</span><span>testuser</span></div>
-<div class="metric-row"><span>Directory</span><span>/home/testuser</span></div>
-</div>
-
-<div class="grid-card">
-<div class="card-header">🌤 Brisbane Weather (Static)</div>
-<div class="metric-row"><span>Temperature</span><span>27°C</span></div>
-<div class="metric-row"><span>Humidity</span><span>65%</span></div>
-<div class="metric-row"><span>Wind</span><span>12 km/h</span></div>
-</div>
-
-</div>
-
-<div class="footer">
-© 2026 AzureSphere Connectivity Lab • Docker + Nginx + SFTP
-</div>
-
-</div>
-
-<script>
-function updateDashboard(){
-    // Check if all elements exist before updating
-    let requestsElement = document.getElementById("requests");
-    let connectionsElement = document.getElementById("connections");
-    let totalConnectionsElement = document.getElementById("totalConnections");
-    let uptimeElement = document.getElementById("uptime");
-    
-    let requests=Math.floor(Math.random()*8500)+1500;
-    let connections=Math.floor(Math.random()*350)+50;
-    
-    if (requestsElement) {
-        requestsElement.innerText=requests.toLocaleString();
-    }
-    
-    if (connectionsElement) {
-        connectionsElement.innerText=connections.toLocaleString();
-    }
-    
-    if (totalConnectionsElement) {
-        totalConnectionsElement.innerText=connections.toLocaleString();
-    }
-
-    let d=Math.floor(Math.random()*30)+15;
-    let h=Math.floor(Math.random()*24);
-    
-    if (uptimeElement) {
-        uptimeElement.innerText=d+"d "+h+"h";
-    }
-}
-
-function updateClock(){
-    let now=new Date();
-    let timeElement = document.getElementById("liveTime");
-    
-    // Format the date to show consistently
-    let options = { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        second: '2-digit',
-        hour12: true 
-    };
-    
-    if (timeElement) {
-        timeElement.innerText=now.toLocaleString('en-US', options);
-    }
-}
-
-// Wait for DOM to be fully loaded before initial updates
-document.addEventListener('DOMContentLoaded', function() {
-    updateDashboard();
-    updateClock();
-    
-    // Set up intervals
-    setInterval(updateDashboard, 10000);
-    setInterval(updateClock, 1000);
-});
-</script>
-
-</body>
-</html>
-EOF
-
-echo "Generating self-signed SSL certificate..."
-openssl req -x509 -nodes -days 365 \
--newkey rsa:2048 \
--keyout nginx/certs/server.key \
--out nginx/certs/server.crt \
--subj "/CN=$(curl -s ifconfig.me)"
-
-echo "Creating Nginx config..."
-cat <<EOF > nginx/conf/default.conf
+echo ""
+echo "[6/7] Copying nginx config..."
+# nginx config is already in nginx/conf/default.conf from git
+# Only write a default if it doesn't exist yet
+if [ ! -f nginx/conf/default.conf ]; then
+  cat <<'EOF' > nginx/conf/default.conf
 server {
     listen 443 ssl;
     server_name _;
 
     ssl_certificate     /etc/nginx/certs/server.crt;
     ssl_certificate_key /etc/nginx/certs/server.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
 
     location / {
-        root   /usr/share/nginx/html;
-        index  index.html;
+        root  /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass         http://host.docker.internal:8080/api/;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+        add_header Access-Control-Allow-Origin  * always;
+        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Content-Type" always;
+        if ($request_method = OPTIONS) { return 204; }
+    }
+
+    location /health {
+        proxy_pass http://host.docker.internal:8080/health;
     }
 }
+
+server {
+    listen 80;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
 EOF
+  echo "   ✓ Default nginx config written"
+else
+  echo "   ✓ nginx config already exists (from repo)"
+fi
 
-echo "Creating test SFTP file..."
-echo "This is a test file from SFTP container" > sftp/data/testfile.txt
+echo ""
+echo "[7/7] Copying index.html and starting containers..."
+cp index.html nginx/html/index.html
 
-echo "Starting Docker containers..."
-sudo docker compose up -d
+sudo docker-compose build agent
+sudo docker-compose up -d
 
-echo "Deployment Complete!"
-echo "To test HTTPS please open this in browser : https://$(curl -s ifconfig.me)"
-echo "To test SFTP connectivity please run this command in shell : sftp -P 2222 testuser@$(curl -s ifconfig.me)"
-echo "Password for SFTP is : password" 
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  ✓ AzureSphere deployed successfully"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "  Dashboard : https://$(hostname -I | awk '{print $1}')"
+echo "  Agent API : http://$(hostname -I | awk '{print $1}'):8080/api/info"
+echo "  SFTP      : sftp -P 22 testuser@$(hostname -I | awk '{print $1}')"
+echo "  SSH Admin : ssh -p 22222 azureuser@$(hostname -I | awk '{print $1}')"
+echo ""
+echo "  Note: IP shown above is current — AzureSphere uses relative"
+echo "  URLs so it works on ANY IP without reconfiguration."
+echo ""
+echo "  Accept the self-signed cert warning in your browser."
+echo "  For production, replace nginx/certs/ with a real certificate."
+echo ""
+sudo docker-compose ps
