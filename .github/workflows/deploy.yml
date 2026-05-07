@@ -20,12 +20,8 @@ jobs:
           timeout:  60s
           script: |
             set -e
-            echo "━━━ [1/3] Pulling latest code ━━━"
             cd ~/AzureSphere
             git pull origin main
-            echo "━━━ [2/3] Copying index.html into nginx html dir ━━━"
             cp index.html nginx/html/index.html
-            echo "✓ Copied"
-            echo "━━━ [3/3] Reloading nginx (zero downtime) ━━━"
             sudo docker exec https-server nginx -s reload
-            echo "✓ Deploy complete — dashboard is live"
+            echo "✓ Live"
