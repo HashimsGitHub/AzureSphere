@@ -2,7 +2,7 @@
 set -e
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  AzureSphere — Setup & Deploy"
+echo "  AzureSphere — VM A Setup & Deploy"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 echo ""
@@ -28,8 +28,6 @@ mkdir -p agent
 
 echo ""
 echo "[5/7] Generating self-signed SSL certificate..."
-# Use a generic CN — works on any IP (public, private, or FQDN)
-# SAN covers localhost, all private RFC1918 ranges, and the wildcard
 HOSTNAME=$(hostname -f 2>/dev/null || hostname)
 openssl req -x509 -nodes -days 825 \
   -newkey rsa:2048 \
@@ -37,16 +35,11 @@ openssl req -x509 -nodes -days 825 \
   -out  nginx/certs/server.crt \
   -subj "/CN=azuresphere-vm/O=AzureSphere/OU=DiagnosticAgent" \
   -addext "subjectAltName=DNS:localhost,DNS:${HOSTNAME},IP:127.0.0.1"
-
-echo "   ✓ Certificate valid for 825 days — CN=azuresphere-vm"
-echo "   ✓ Hostname: ${HOSTNAME}"
+echo "   ✓ Certificate valid for 825 days"
 
 echo ""
-echo "[6/7] Copying nginx config..."
-# nginx config is already in nginx/conf/default.conf from git
-# Only write a default if it doesn't exist yet
-if [ ! -f nginx/conf/default.conf ]; then
-  cat <<'EOF' > nginx/conf/default.conf
+echo "[6/7] Writing nginx config..."
+cat > nginx/conf/default.conf << 'NGINXEOF'
 server {
     listen 443 ssl;
     server_name _;
@@ -86,22 +79,18 @@ server {
     server_name _;
     return 301 https://$host$request_uri;
 }
-EOF
-  echo "   ✓ Default nginx config written"
-else
-  echo "   ✓ nginx config already exists (from repo)"
-fi
+NGINXEOF
+echo "   ✓ nginx config written"
 
 echo ""
-echo "[7/7] Copying index.html and starting containers..."
+echo "[7/7] Copying index.html and starting all containers..."
 cp index.html nginx/html/index.html
-
 sudo docker-compose build agent
 sudo docker-compose up -d
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✓ AzureSphere deployed successfully"
+echo "  ✓ VM A deployed successfully"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "  Dashboard : https://$(hostname -I | awk '{print $1}')"
@@ -109,10 +98,5 @@ echo "  Agent API : http://$(hostname -I | awk '{print $1}'):8080/api/info"
 echo "  SFTP      : sftp -P 22 testuser@$(hostname -I | awk '{print $1}')"
 echo "  SSH Admin : ssh -p 22222 azureuser@$(hostname -I | awk '{print $1}')"
 echo ""
-echo "  Note: IP shown above is current — AzureSphere uses relative"
-echo "  URLs so it works on ANY IP without reconfiguration."
-echo ""
-echo "  Accept the self-signed cert warning in your browser."
-echo "  For production, replace nginx/certs/ with a real certificate."
-echo ""
 sudo docker-compose ps
+EOF
