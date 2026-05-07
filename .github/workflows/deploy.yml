@@ -38,6 +38,8 @@ jobs:
             fi
             cp nginx/conf/default.conf nginx/conf/default.conf 2>/dev/null || true
             sudo docker-compose build agent
+            sudo docker stop azuresphere-agent 2>/dev/null || true
+            sudo docker rm azuresphere-agent 2>/dev/null || true
             sudo docker-compose up -d
             sudo docker exec https-server nginx -s reload
             echo "VM A deploy complete"
