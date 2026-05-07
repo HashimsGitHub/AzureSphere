@@ -451,6 +451,7 @@ async function clearDisplay(btn) {
 }
 
 function resumeRefresh() {
+  const btn = this;
   paused = false;
   prevCount = 0;
   loadData();
