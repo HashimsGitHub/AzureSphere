@@ -1,0 +1,61 @@
+services:
+
+  # ── VM B Dashboard (nginx serving the GUI) ────────────────────────────
+  dashboard:
+    image: nginx:latest
+    container_name: vmb-dashboard
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/certs:/etc/nginx/certs
+      - ./nginx/html:/usr/share/nginx/html
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # ── Persona API (serves /api/personas, /api/connections, /api/status) ─
+  # All persona containers report connections to this central API
+  persona-api:
+    build: ./personas
+    container_name: vmb-persona-api
+    ports:
+      - "9090:9090"
+    environment:
+      API_PORT: "9090"
+      # ── Define personas here — format: Name:Protocol:Port:OptionalBanner ──
+      # Add as many PERSONA_n as you want. Each spawns a real TCP listener.
+      PERSONA_1: "SQL Server 2022:SQL:1433:"
+      PERSONA_2: "PostgreSQL 16:POSTGRES:5432:"
+      PERSONA_3: "FTP Server:FTP:21:"
+      PERSONA_4: "RabbitMQ 3.12:RABBITMQ:5672:"
+      PERSONA_5: "SAP HANA:HANA:30015:"
+      PERSONA_6: "webMethods IS:WEBMETHODS:5555:"
+      PERSONA_7: "SMB File Share:SMB:445:"
+      PERSONA_8: "Custom TCP App:TCP:8888:220 Custom App Ready"
+    network_mode: host
+    restart: unless-stopped
+
+  # ── HTTPS/TLS persona — real nginx with SSL cert ───────────────────────
+  # VM A TLS inspector will read the real cert chain from this
+  persona-https:
+    image: nginx:latest
+    container_name: vmb-persona-https
+    ports:
+      - "8443:443"
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs
+      - ./personas/https-persona.conf:/etc/nginx/conf.d/default.conf
+    restart: unless-stopped
+
+  # ── SFTP persona ───────────────────────────────────────────────────────
+  persona-sftp:
+    image: atmoz/sftp:latest
+    container_name: vmb-persona-sftp
+    ports:
+      - "22:22"
+    volumes:
+      - ./sftp-data:/home/sftpuser/files
+    command: sftpuser:SftpPass123:1001
+    restart: unless-stopped
