@@ -889,7 +889,7 @@ function renderTargetList() {
   if (!document.getElementById("target-list")) return;
   const el = document.getElementById('target-list');
   const empty = document.getElementById('target-empty');
-  if (targets.length === 0) { empty.style.display=''; el.innerHTML=''; el.appendChild(empty); return; }
+  const empty = document.getElementById("target-empty"); if (!empty) return;
   empty.style.display = 'none';
   el.innerHTML = '';
   targets.forEach(t => {
