@@ -21,7 +21,7 @@ jobs:
           script: |
             set -e
             if [ ! -d ~/AzureSphere ]; then
-              git clone https://REMOVED_PAT@github.com/HashimsGitHub/AzureSphere.git ~/AzureSphere
+              git clone https://${{ secrets.GH_PAT }}@github.com/HashimsGitHub/AzureSphere.git ~/AzureSphere
             fi
             cd ~/AzureSphere
             git fetch origin main
@@ -90,7 +90,7 @@ NGINXEOF
           script: |
             set -e
             if [ ! -d ~/AzureSphere ]; then
-              git clone https://REMOVED_PAT@github.com/HashimsGitHub/AzureSphere.git ~/AzureSphere
+              git clone https://${{ secrets.GH_PAT }}@github.com/HashimsGitHub/AzureSphere.git ~/AzureSphere
             fi
             cd ~/AzureSphere/simulator
             git fetch origin main
