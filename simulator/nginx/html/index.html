@@ -277,7 +277,7 @@ body::before {
       </div>
       <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn-ghost" onclick="exportLog()"><i class="fas fa-download"></i>&nbsp; Export JSON</button>
-        <button class="btn-ghost" onclick="clearDisplay()"><i class="fas fa-trash"></i>&nbsp; Clear display</button>
+        <button class="btn-ghost" onclick="clearDisplay(this)"><i class="fas fa-trash"></i>&nbsp; Clear display</button>
         <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">Refreshes every 5s</span>
       </div>
     </div>
@@ -443,7 +443,7 @@ async function clearDisplay(btn) {
   document.getElementById('log-count').textContent = 'cleared';
 
   // Change clear button to resume button
-  btn = btn || event.target.closest('button');
+  // btn passed directly from onclick
   btn.innerHTML = '<i class="fas fa-play"></i>&nbsp; Resume';
   btn.onclick = resumeRefresh;
   btn.style.color = 'var(--green)';
@@ -456,7 +456,7 @@ function resumeRefresh() {
   loadData();
 
   // Restore clear button
-  btn = btn || event.target.closest('button');
+  // btn passed directly from onclick
   btn.innerHTML = '<i class="fas fa-trash"></i>&nbsp; Clear';
   btn.onclick = clearDisplay;
   btn.style.color = '';
