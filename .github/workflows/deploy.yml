@@ -1,3 +1,6 @@
+cd "/mnt/c/Users/hhilal/OneDrive - DXC Production/Documents/VSCode_Projects/AzureSphere"
+
+cat > .github/workflows/deploy.yml << 'EOF'
 name: Deploy to Azure VM
 
 on:
@@ -6,7 +9,7 @@ on:
 
 jobs:
   deploy:
-    name: SSH → Pull → Copy → Reload nginx
+    name: SSH → Pull → Build → Reload
     runs-on: ubuntu-latest
 
     steps:
@@ -17,12 +20,29 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key:      ${{ secrets.VM_SSH_KEY }}
           port:     22222
-          timeout:  60s
+          timeout:  180s
           script: |
             set -e
             cd ~/AzureSphere
+
+            echo "━━━ [1/4] Pulling latest code ━━━"
             git fetch origin main
             git reset --hard origin/main
+
+            echo "━━━ [2/4] Syncing index.html ━━━"
             cp index.html nginx/html/index.html
+
+            echo "━━━ [3/4] Building agent if needed ━━━"
+            sudo docker-compose build agent
+            sudo docker-compose up -d
+
+            echo "━━━ [4/4] Reloading nginx ━━━"
             sudo docker exec https-server nginx -s reload
-            echo "✓ Live"
+
+            echo "✓ All services live"
+            sudo docker-compose ps
+EOF
+
+git add .github/workflows/deploy.yml
+git commit -m "fix: use docker-compose up -d before nginx reload to handle fresh VM"
+git push
