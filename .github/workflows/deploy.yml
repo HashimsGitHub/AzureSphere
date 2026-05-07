@@ -20,16 +20,27 @@ jobs:
           timeout:  180s
           script: |
             set -e
+
+            if [ ! -d ~/AzureSphere ]; then
+              echo "Repo not found - cloning fresh"
+              git clone https://REMOVED_PAT@github.com/HashimsGitHub/AzureSphere.git ~/AzureSphere
+            fi
+
             cd ~/AzureSphere
             echo "Step 1 - Pulling latest code"
             git fetch origin main
             git reset --hard origin/main
+
             echo "Step 2 - Syncing index.html"
+            mkdir -p nginx/html
             cp index.html nginx/html/index.html
+
             echo "Step 3 - Building and starting containers"
             sudo docker-compose build agent
             sudo docker-compose up -d
+
             echo "Step 4 - Reloading nginx"
             sudo docker exec https-server nginx -s reload
+
             echo "Done - all services live"
             sudo docker-compose ps
