@@ -293,7 +293,7 @@ body::before {
 </div>
 <script>
 const API = '/api';
-let connData = [], prevCount = 0;
+let connData = [], prevCount = 0, paused = false, refreshTimer = null;
 
 setInterval(() => {
   document.getElementById('clock').textContent =
@@ -422,16 +422,56 @@ function exportLog() {
   a.click();
 }
 
-function clearDisplay() {
+async function clearDisplay() {
+  // Call server reset endpoint to wipe the real log
+  try {
+    const res = await fetch('/api/connections/reset', { method: 'POST' });
+    const data = await res.json();
+    console.log('Log reset:', data.cleared, 'entries cleared');
+  } catch(e) {
+    console.warn('Reset failed:', e.message);
+  }
+
+  // Pause auto-refresh and clear display
+  paused = true;
   prevCount = 0;
+  connData = [];
+
   document.getElementById('conn-log').innerHTML =
-    '<tr><td colspan="5" class="empty"><i class="fas fa-satellite-dish"></i><br>Display cleared — live data resumes on next refresh</td></tr>';
+    '<tr><td colspan="5" class="empty"><i class="fas fa-check-circle" style="color:var(--green)"></i><br>Connection log cleared<br><span style="font-size:10px">Auto-refresh paused — click Resume to restart</span></td></tr>';
+
+  document.getElementById('log-count').textContent = 'cleared';
+
+  // Change clear button to resume button
+  const btn = event.target.closest('button');
+  btn.innerHTML = '<i class="fas fa-play"></i>&nbsp; Resume';
+  btn.onclick = resumeRefresh;
+  btn.style.color = 'var(--green)';
+  btn.style.borderColor = 'rgba(0,230,118,0.4)';
+}
+
+function resumeRefresh() {
+  paused = false;
+  prevCount = 0;
+  loadData();
+
+  // Restore clear button
+  const btn = event.target.closest('button');
+  btn.innerHTML = '<i class="fas fa-trash"></i>&nbsp; Clear';
+  btn.onclick = clearDisplay;
+  btn.style.color = '';
+  btn.style.borderColor = '';
 }
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+function startRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => { if (!paused) loadData(); }, 5000);
+}
+
 loadData();
-setInterval(loadData, 5000);
+startRefresh();
 </script>
 </body>
 </html>

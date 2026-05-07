@@ -34,15 +34,17 @@ type ConnectionEvent struct {
 // ─── Global state ─────────────────────────────────────────────────────────────
 
 var (
-	personas  []Persona
-	connLog   []ConnectionEvent
-	connMu    sync.Mutex
-	startTime = time.Now()
+	personas      []Persona
+	connLog       []ConnectionEvent
+	connMu        sync.Mutex
+	startTime     = time.Now()
+	totalConnects int64
 )
 
 func logConn(persona string, port int, protocol, remote string) {
 	connMu.Lock()
 	defer connMu.Unlock()
+	totalConnects++
 	ev := ConnectionEvent{
 		Time:     time.Now().UTC().Format(time.RFC3339),
 		Persona:  persona,
@@ -51,8 +53,8 @@ func logConn(persona string, port int, protocol, remote string) {
 		RemoteIP: remote,
 	}
 	connLog = append([]ConnectionEvent{ev}, connLog...)
-	if len(connLog) > 200 {
-		connLog = connLog[:200]
+	if len(connLog) > 500 {
+		connLog = connLog[:500]
 	}
 	log.Printf("[%s] connection from %s → %s :%d", protocol, remote, persona, port)
 }
@@ -339,13 +341,37 @@ func main() {
 		writeJSON(w, connLog)
 	})
 
+	// Reset endpoint — clears in-memory log only, does not affect totalConnects counter
+	mux.HandleFunc("/api/connections/reset", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		connMu.Lock()
+		cleared := len(connLog)
+		connLog = []ConnectionEvent{}
+		connMu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"cleared":   cleared,
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		})
+		log.Printf("[RESET] connection log cleared (%d entries removed)", cleared)
+	})
+
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
+		connMu.Lock()
+		logLen := len(connLog)
+		total := totalConnects
+		connMu.Unlock()
 		hostname, _ := os.Hostname()
 		writeJSON(w, map[string]interface{}{
 			"hostname":       hostname,
 			"uptime":         time.Since(startTime).Round(time.Second).String(),
 			"persona_count":  len(personas),
-			"total_connects": len(connLog),
+			"total_connects": total,
+			"log_entries":    logLen,
 			"timestamp":      time.Now().UTC().Format(time.RFC3339),
 		})
 	})
