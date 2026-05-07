@@ -15,7 +15,7 @@ services:
     image: atmoz/sftp:latest
     container_name: sftp-server
     ports:
-      - "2222:22"
+      - "22:22"
     volumes:
       - ./sftp/data:/home/testuser/files
     command: testuser:password:1001
