@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+// ─── Response types ───────────────────────────────────────────────────────────
+
 type TCPResult struct {
 	Host      string  `json:"host"`
 	Port      int     `json:"port"`
@@ -27,22 +29,22 @@ type TCPResult struct {
 }
 
 type DNSResult struct {
-	Host       string   `json:"host"`
-	IPs        []string `json:"ips"`
-	ResolvedIn float64  `json:"resolved_ms"`
-	IsPrivate  []bool   `json:"is_private"`
-	SplitBrain bool     `json:"split_brain"`
-	AzureDNS   bool     `json:"azure_dns"`
-	Error      string   `json:"error,omitempty"`
-	Timestamp  string   `json:"timestamp"`
+	Host        string   `json:"host"`
+	IPs         []string `json:"ips"`
+	ResolvedIn  float64  `json:"resolved_ms"`
+	IsPrivate   []bool   `json:"is_private"`
+	SplitBrain  bool     `json:"split_brain"`
+	AzureDNS    bool     `json:"azure_dns"`
+	Error       string   `json:"error,omitempty"`
+	Timestamp   string   `json:"timestamp"`
 }
 
 type CertInfo struct {
-	Subject  string `json:"subject"`
-	Issuer   string `json:"issuer"`
-	NotAfter string `json:"not_after"`
-	DaysLeft int    `json:"days_left"`
-	Type     string `json:"type"`
+	Subject   string `json:"subject"`
+	Issuer    string `json:"issuer"`
+	NotAfter  string `json:"not_after"`
+	DaysLeft  int    `json:"days_left"`
+	Type      string `json:"type"`
 }
 
 type TLSResult struct {
@@ -55,6 +57,8 @@ type TLSResult struct {
 	TrustError  string     `json:"trust_error,omitempty"`
 	Certificate *CertInfo  `json:"certificate,omitempty"`
 	Chain       []CertInfo `json:"chain,omitempty"`
+	SANs        []string   `json:"sans,omitempty"`
+	ChainErrors []string   `json:"chain_errors,omitempty"`
 	LatencyMs   float64    `json:"latency_ms"`
 	Error       string     `json:"error,omitempty"`
 	Timestamp   string     `json:"timestamp"`
@@ -83,6 +87,8 @@ type AgentInfo struct {
 }
 
 var startTime = time.Now()
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
 
@@ -142,9 +148,11 @@ func certType(cert *x509.Certificate) string {
 	if cert.IsCA {
 		return "Intermediate CA"
 	}
+	// check if self-signed
 	if cert.Issuer.String() == cert.Subject.String() {
 		return "Self-Signed"
 	}
+	// check for known public CAs
 	issuer := cert.Issuer.String()
 	publicCAs := []string{"DigiCert", "Let's Encrypt", "Sectigo", "GlobalSign", "Comodo", "GeoTrust", "Entrust", "VeriSign"}
 	for _, ca := range publicCAs {
@@ -168,6 +176,7 @@ func parseRequest(r *http.Request) (host string, port int, err error) {
 	host = r.URL.Query().Get("host")
 	portStr := r.URL.Query().Get("port")
 	if host == "" {
+		// try JSON body
 		var body struct {
 			Host string `json:"host"`
 			Port int    `json:"port"`
@@ -188,22 +197,27 @@ func parseRequest(r *http.Request) (host string, port int, err error) {
 	return host, port, nil
 }
 
+// ─── Handlers ─────────────────────────────────────────────────────────────────
+
+// GET /api/info
 func handleInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		writeJSON(w, http.StatusOK, nil)
 		return
 	}
 	hostname, _ := os.Hostname()
+	uptime := time.Since(startTime).Round(time.Second).String()
 	writeJSON(w, http.StatusOK, AgentInfo{
 		Version:   "1.0.0",
 		Hostname:  hostname,
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,
-		Uptime:    time.Since(startTime).Round(time.Second).String(),
+		Uptime:    uptime,
 		Timestamp: now(),
 	})
 }
 
+// POST /api/test/tcp   ?host=x&port=y
 func handleTCP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		writeJSON(w, http.StatusOK, nil)
@@ -221,7 +235,13 @@ func handleTCP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	latency := float64(time.Since(start).Microseconds()) / 1000.0
-	result := TCPResult{Host: host, Port: port, LatencyMs: math.Round(latency*100) / 100, Timestamp: now()}
+
+	result := TCPResult{
+		Host:      host,
+		Port:      port,
+		LatencyMs: math.Round(latency*100) / 100,
+		Timestamp: now(),
+	}
 	if err != nil {
 		result.Success = false
 		result.Error = err.Error()
@@ -232,6 +252,7 @@ func handleTCP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// POST /api/test/dns   ?host=x
 func handleDNS(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		writeJSON(w, http.StatusOK, nil)
@@ -242,22 +263,27 @@ func handleDNS(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, DNSResult{Error: err.Error(), Timestamp: now()})
 		return
 	}
+
 	start := time.Now()
 	addrs, err := net.LookupHost(host)
 	resolvedIn := float64(time.Since(start).Microseconds()) / 1000.0
+
 	result := DNSResult{
 		Host:       host,
 		ResolvedIn: math.Round(resolvedIn*100) / 100,
 		Timestamp:  now(),
-		AzureDNS:   strings.Contains(host, ".azure.") || strings.Contains(host, ".windows.net") || strings.Contains(host, ".blob.") || strings.Contains(host, ".database.windows.net"),
+		AzureDNS:   strings.Contains(host, ".azure.") || strings.Contains(host, ".windows.net") || strings.Contains(host, ".blob.") || strings.Contains(host, ".servicebus.") || strings.Contains(host, ".database.windows.net"),
 	}
+
 	if err != nil {
 		result.Error = err.Error()
 		writeJSON(w, http.StatusOK, result)
 		return
 	}
+
 	result.IPs = addrs
-	hasPrivate, hasPublic := false, false
+	hasPrivate := false
+	hasPublic := false
 	for _, ip := range addrs {
 		priv := isPrivateIP(ip)
 		result.IsPrivate = append(result.IsPrivate, priv)
@@ -271,6 +297,7 @@ func handleDNS(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// POST /api/test/tls   ?host=x&port=y
 func handleTLS(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		writeJSON(w, http.StatusOK, nil)
@@ -284,8 +311,11 @@ func handleTLS(w http.ResponseWriter, r *http.Request) {
 	if port == 0 {
 		port = 443
 	}
+
 	addr := fmt.Sprintf("%s:%d", host, port)
 	result := TLSResult{Host: host, Port: port, Timestamp: now()}
+
+	// Stage 1: TLS handshake with bypass (inspect cert regardless of trust)
 	start := time.Now()
 	conn, err := tls.DialWithDialer(
 		&net.Dialer{Timeout: 8 * time.Second},
@@ -293,6 +323,7 @@ func handleTLS(w http.ResponseWriter, r *http.Request) {
 		&tls.Config{InsecureSkipVerify: true, ServerName: host},
 	)
 	result.LatencyMs = math.Round(float64(time.Since(start).Microseconds())/10) / 100
+
 	if err != nil {
 		result.Success = false
 		result.Error = err.Error()
@@ -300,13 +331,39 @@ func handleTLS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+
 	result.Success = true
 	state := conn.ConnectionState()
 	result.TLSVersion = tlsVersionName(state.Version)
 	result.CipherSuite = cipherName(state.CipherSuite)
+
+	// Certificate details
 	if len(state.PeerCertificates) > 0 {
 		leaf := state.PeerCertificates[0]
 		daysLeft := int(time.Until(leaf.NotAfter).Hours() / 24)
+
+		// Extract SANs
+		var sans []string
+		for _, dns := range leaf.DNSNames {
+			sans = append(sans, dns)
+		}
+		for _, ip := range leaf.IPAddresses {
+			sans = append(sans, ip.String())
+		}
+
+		// Build chain with validation
+		x509chain := x509.NewCertPool()
+		for _, c := range state.PeerCertificates[1:] {
+			x509chain.AddCert(c)
+		}
+		var chainErrors []string
+		opts := x509.VerifyOptions{Intermediates: x509chain}
+		if _, err := leaf.Verify(opts); err != nil {
+			chainErrors = append(chainErrors, err.Error())
+		}
+
+		result.SANs = sans
+		result.ChainErrors = chainErrors
 		result.Certificate = &CertInfo{
 			Subject:  leaf.Subject.String(),
 			Issuer:   leaf.Issuer.String(),
@@ -325,6 +382,8 @@ func handleTLS(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+
+	// Stage 2: Real-world trust validation (using system cert store)
 	_, trustErr := tls.DialWithDialer(
 		&net.Dialer{Timeout: 8 * time.Second},
 		"tcp", addr,
@@ -336,9 +395,11 @@ func handleTLS(w http.ResponseWriter, r *http.Request) {
 	} else {
 		result.Trusted = true
 	}
+
 	writeJSON(w, http.StatusOK, result)
 }
 
+// POST /api/test/ping   ?host=x
 func handlePing(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		writeJSON(w, http.StatusOK, nil)
@@ -349,9 +410,20 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, PingResult{Error: err.Error(), Timestamp: now()})
 		return
 	}
+
 	result := PingResult{Host: host, Sent: 4, Timestamp: now()}
-	out, err := exec.Command("ping", "-c", "4", "-W", "3", host).Output()
+
+	// Use system ping — works on Linux inside Docker
+	pingCmd := "ping"
+	args := []string{"-c", "4", "-W", "3", host}
+	if runtime.GOOS == "windows" {
+		args = []string{"-n", "4", host}
+	}
+
+	out, err := exec.Command(pingCmd, args...).Output()
 	if err != nil {
+		// ping binary failed — fall back to TCP RTT measurement
+		result.Error = "ICMP requires NET_ADMIN cap — falling back to TCP RTT"
 		var rtts []float64
 		received := 0
 		for i := 0; i < 4; i++ {
@@ -370,12 +442,8 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 		if len(rtts) > 0 {
 			min, max, sum := rtts[0], rtts[0], 0.0
 			for _, v := range rtts {
-				if v < min {
-					min = v
-				}
-				if v > max {
-					max = v
-				}
+				if v < min { min = v }
+				if v > max { max = v }
 				sum += v
 			}
 			result.MinMs = min
@@ -385,9 +453,13 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, result)
 		return
 	}
-	lines := strings.Split(string(out), "\n")
+
+	// Parse ping output
+	output := string(out)
+	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "packets transmitted") {
+			// Linux: "4 packets transmitted, 4 received, 0% packet loss"
 			parts := strings.Fields(line)
 			for i, p := range parts {
 				if p == "transmitted," && i > 0 {
@@ -399,7 +471,8 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 			}
 			result.PacketLoss = math.Round(float64(result.Sent-result.Received)/float64(result.Sent)*100*100) / 100
 		}
-		if strings.Contains(line, "rtt min") {
+		if strings.Contains(line, "rtt min") || strings.Contains(line, "round-trip") {
+			// Linux: "rtt min/avg/max/mdev = 1.234/2.345/3.456/0.123 ms"
 			parts := strings.Split(line, "=")
 			if len(parts) == 2 {
 				stats := strings.Split(strings.TrimSpace(parts[1]), "/")
@@ -411,25 +484,32 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
 	writeJSON(w, http.StatusOK, result)
 }
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 func main() {
 	port := os.Getenv("AGENT_PORT")
 	if port == "" {
 		port = "8080"
 	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/info", handleInfo)
-	mux.HandleFunc("/api/test/tcp", handleTCP)
-	mux.HandleFunc("/api/test/dns", handleDNS)
-	mux.HandleFunc("/api/test/tls", handleTLS)
-	mux.HandleFunc("/api/test/ping", handlePing)
+	mux.HandleFunc("/api/info",       handleInfo)
+	mux.HandleFunc("/api/test/tcp",   handleTCP)
+	mux.HandleFunc("/api/test/dns",   handleDNS)
+	mux.HandleFunc("/api/test/tls",   handleTLS)
+	mux.HandleFunc("/api/test/ping",  handlePing)
+
+	// Health check
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+
 	log.Printf("AzureSphere Agent v1.0.0 listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, mux))
 }

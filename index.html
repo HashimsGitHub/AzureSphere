@@ -527,35 +527,55 @@ body::before {
 <!-- ══════════════════════════════════════════════ -->
 <div id="tab-tls" class="tab-content">
   <div class="main-grid">
-    <div class="panel">
-      <div class="panel-title"><i class="fas fa-shield-alt"></i> Run TLS Inspection</div>
-      <div class="section-label">Target</div>
-      <div class="input-group">
-        <input class="inp" id="tls-host" placeholder="host.corp.internal or 10.0.1.50" />
-        <input class="inp inp-sm" id="tls-port" placeholder="Port" value="443" type="number" />
-      </div>
-      <button class="btn-run" onclick="runTLSInspect()">
-        <i class="fas fa-search"></i>&nbsp; Inspect TLS / Certificate
-      </button>
 
-      <div class="divider"></div>
-      <div class="section-label">Legacy TLS Audit</div>
-      <div id="tls-legacy-result">
-        <div class="empty" style="padding:20px 0">
-          <i class="fas fa-history"></i>
-          Run inspection to see protocol support.
+    <!-- LEFT: Controls -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="panel">
+        <div class="panel-title"><i class="fas fa-shield-alt"></i> TLS Inspection</div>
+        <div class="section-label">Target</div>
+        <div class="input-group">
+          <input class="inp" id="tls-host" placeholder="host.corp.internal or 10.0.1.50" />
+          <input class="inp inp-sm" id="tls-port" placeholder="Port" value="443" type="number" />
+        </div>
+        <button class="btn-run" id="btn-tls" onclick="runTLSInspect()">
+          <i class="fas fa-search"></i>&nbsp; Inspect TLS / Certificate
+        </button>
+      </div>
+
+      <!-- Legacy TLS Audit -->
+      <div class="panel">
+        <div class="panel-title"><i class="fas fa-history"></i> Legacy TLS Audit</div>
+        <div id="tls-legacy-result">
+          <div class="empty" style="padding:10px 0;font-size:11px">
+            Run inspection to see protocol support.
+          </div>
+        </div>
+      </div>
+
+      <!-- Certificate Downloads -->
+      <div class="panel" id="tls-download-panel" style="display:none">
+        <div class="panel-title"><i class="fas fa-download"></i> Download Certificates</div>
+        <div class="section-label">Export formats</div>
+        <div style="display:flex;flex-direction:column;gap:8px;" id="tls-download-btns"></div>
+        <div style="margin-top:10px;font-size:10px;color:var(--text-muted)">
+          <i class="fas fa-info-circle"></i> Public certificates only. Private keys are never available from a TLS handshake.
         </div>
       </div>
     </div>
 
+    <!-- RIGHT: Full report -->
     <div class="right-col">
-      <div class="panel tls-panel" id="tls-main-result">
-        <div class="panel-title"><i class="fas fa-certificate"></i> Certificate Inspector</div>
+      <div class="panel" id="tls-main-result">
+        <div class="panel-title"><i class="fas fa-certificate"></i> Certificate Inspector
+          <span id="tls-runtime" style="margin-left:auto;font-size:11px;color:var(--text-muted);font-family:var(--mono)"></span>
+        </div>
         <div class="empty" id="tls-empty">
           <i class="fas fa-certificate"></i>
           No inspection run yet.<br>Enter a target and click Inspect.
         </div>
         <div id="tls-data" style="display:none">
+
+          <!-- Grade + summary -->
           <div class="tls-grade">
             <div class="grade-box N" id="tls-grade-box">—</div>
             <div class="grade-detail">
@@ -563,12 +583,33 @@ body::before {
               <p id="tls-grade-sub">—</p>
             </div>
           </div>
-          <div class="section-label">TLS Connection</div>
+
+          <!-- Stage 3a: TLS Handshake -->
+          <div class="section-label">Stage 3a — TLS Handshake</div>
           <div class="kv-list" id="tls-connection-kv"></div>
+
+          <!-- Certificate Details -->
           <div class="section-label" style="margin-top:16px">Certificate Details</div>
           <div class="kv-list" id="tls-cert-kv"></div>
-          <div class="section-label" style="margin-top:16px">Certificate Chain</div>
-          <div class="cert-chain" id="cert-chain"></div>
+
+          <!-- SANs -->
+          <div class="section-label" style="margin-top:16px">Subject Alternative Names</div>
+          <div id="tls-sans-panel" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;line-height:1.8"></div>
+
+          <!-- Stage 3b: Trust Validation -->
+          <div class="section-label" style="margin-top:16px">Stage 3b — Real-World Trust Validation</div>
+          <div class="kv-list" id="tls-trust-kv"></div>
+
+          <!-- Full Certificate Chain -->
+          <div class="section-label" style="margin-top:16px">Full Certificate Chain</div>
+          <div id="cert-chain"></div>
+
+          <!-- Chain Errors -->
+          <div id="tls-chain-errors" style="display:none;margin-top:10px"></div>
+
+          <!-- Warnings -->
+          <div id="tls-warnings" style="display:none;margin-top:12px"></div>
+
         </div>
       </div>
     </div>
@@ -745,7 +786,7 @@ function selectProto(btn) {
 // ══════════════════════════════════════════════
 //  ADD TARGET + RUN TEST (F1)
 // ══════════════════════════════════════════════
-async function addAndRun() {
+function addAndRun() {
   const host  = document.getElementById('inp-host').value.trim();
   const port  = parseInt(document.getElementById('inp-port').value) || 443;
   const label = document.getElementById('inp-label').value.trim() || selectedProto;
@@ -769,7 +810,7 @@ async function addAndRun() {
   btn.disabled = true; btn.classList.add('running');
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>&nbsp; Testing...';
 
-  await simulateTest(target, async () => {
+  simulateTest(target, () => {
     renderTargetList();
     renderPortCards();
     updateStats();
@@ -886,9 +927,9 @@ async function simulateTest(target, cb) {
 //  RENDER TARGET LIST
 // ══════════════════════════════════════════════
 function renderTargetList() {
-  if (!document.getElementById("target-list")) return;
   const el = document.getElementById('target-list');
-  const empty = document.getElementById("target-empty"); if (!el || !empty) return;
+  const empty = document.getElementById('target-empty');
+  if (targets.length === 0) { empty.style.display=''; el.innerHTML=''; el.appendChild(empty); return; }
   empty.style.display = 'none';
   el.innerHTML = '';
   targets.forEach(t => {
@@ -1047,53 +1088,306 @@ async function runTLSInspect() {
   const port = parseInt(document.getElementById('tls-port').value) || 443;
   if (!host) { document.getElementById('tls-host').focus(); return; }
 
+  const btn = document.getElementById('btn-tls');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>&nbsp; Inspecting...';
+
   document.getElementById('tls-empty').style.display = '';
-  document.getElementById('tls-empty').innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:28px;display:block;margin-bottom:12px;opacity:0.5"></i> Connecting to '+host+'...';
+  document.getElementById('tls-empty').innerHTML = `
+    <i class="fas fa-circle-notch fa-spin" style="font-size:28px;display:block;margin-bottom:12px;opacity:0.5"></i>
+    <div>Stage 3a — TLS Handshake...</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${host}:${port}</div>`;
   document.getElementById('tls-data').style.display = 'none';
+  document.getElementById('tls-download-panel').style.display = 'none';
+
+  const t0 = Date.now();
 
   try {
-    let data;
+    let res;
     if (agentOnline) {
-      const res = await API.tls(host, port);
-      if (!res.success) {
-        document.getElementById('tls-empty').innerHTML =
-          `<i class="fas fa-times-circle" style="color:var(--red);font-size:28px;display:block;margin-bottom:12px"></i> ${res.error || 'TLS connection failed'}`;
-        return;
-      }
-      const cert = res.certificate || {};
-      data = {
-        host, daysLeft: cert.days_left || 0,
-        tlsVersion: res.tls_version,
-        cipher:     res.cipher_suite,
-        keySize:    2048, keyType: 'RSA',
-        sigAlg:     'SHA-256 with RSA',
-        subject:    cert.subject || host,
-        issuer:     cert.issuer  || 'Unknown',
-        expiry:     cert.not_after || '—',
-        trust:      cert.type   || 'Unknown',
-        trusted:    res.trusted,
-        trustError: res.trust_error,
-        sni:        host,
-        sans:       [host],
-        thumbprint: '(see cert export)',
-        serial:     '(see cert export)',
-        chain:      (res.chain || []).map(c => ({
-          type: c.type, name: c.subject, exp: c.not_after
-        })),
-      };
+      res = await API.tls(host, port);
     } else {
-      await new Promise(r => setTimeout(r, 900 + Math.random()*600));
-      data = generateSimTLSData(host);
+      await new Promise(r => setTimeout(r, 900));
+      res = { success: false, error: 'Agent offline — start agent to run real TLS inspection' };
     }
-    tlsResult = data;
-    renderTLSData(data);
+
+    const runtime = ((Date.now() - t0) / 1000).toFixed(2);
+    document.getElementById('tls-runtime').textContent = `${runtime}s`;
+
+    if (!res.success) {
+      document.getElementById('tls-empty').innerHTML = `
+        <i class="fas fa-times-circle" style="color:var(--red);font-size:28px;display:block;margin-bottom:12px"></i>
+        <strong>TLS handshake failed</strong><br>
+        <span style="font-size:11px;color:var(--text-muted)">${res.error || 'Connection refused'}</span>`;
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-search"></i>&nbsp; Inspect TLS / Certificate';
+      return;
+    }
+
+    tlsResult = res;
+    renderTLSFull(res, host, port);
     renderLegacyTLS();
+    renderCertDownloads(res, host);
     updateStats();
+
   } catch(e) {
     document.getElementById('tls-empty').innerHTML =
       `<i class="fas fa-times-circle" style="color:var(--red);font-size:28px;display:block;margin-bottom:12px"></i> Error: ${e.message}`;
   }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-search"></i>&nbsp; Inspect TLS / Certificate';
 }
+
+function renderTLSFull(res, host, port) {
+  document.getElementById('tls-empty').style.display = 'none';
+  document.getElementById('tls-data').style.display = '';
+
+  const cert = res.certificate || {};
+  const chain = res.chain || [];
+  const daysLeft = cert.days_left || 0;
+  const warnings = [];
+
+  // ── Security Grade (mirrors sslCheck.ps1 colour logic) ──
+  let grade = 'A', gradeTitle = 'Strong security', gradeSub = `${res.tls_version} · Valid certificate`;
+  const tlsVer = res.tls_version || '';
+  const cipher = res.cipher_suite || '';
+
+  if (tlsVer === 'TLS 1.0' || tlsVer === 'TLS 1.1') {
+    grade = 'C'; gradeTitle = 'Deprecated TLS version';
+    gradeSub = `${tlsVer} is deprecated — upgrade to TLS 1.2 or 1.3`;
+    warnings.push(`Negotiated TLS is ${tlsVer} which is deprecated.`);
+  } else if (cipher.includes('RC4') || cipher.includes('DES') || cipher.includes('3DES')) {
+    grade = 'C'; gradeTitle = 'Weak cipher suite';
+    gradeSub = `${cipher} is insecure`;
+    warnings.push(`Weak cipher negotiated: ${cipher}`);
+  } else if (daysLeft < 0) {
+    grade = 'F'; gradeTitle = 'Certificate EXPIRED';
+    gradeSub = `Expired ${Math.abs(daysLeft)} days ago`;
+    warnings.push(`Certificate EXPIRED ${Math.abs(daysLeft)} days ago.`);
+  } else if (daysLeft < 30) {
+    grade = 'B'; gradeTitle = 'Certificate expiring soon';
+    gradeSub = `Only ${daysLeft} days remaining — renew immediately`;
+    warnings.push(`Certificate expires in ${daysLeft} days. Renew immediately.`);
+  } else if (daysLeft < 90) {
+    grade = 'B'; gradeTitle = 'Certificate renewal due';
+    gradeSub = `${daysLeft} days remaining — schedule renewal`;
+    warnings.push(`Certificate expires in ${daysLeft} days. Schedule renewal soon.`);
+  } else if (!res.trusted) {
+    grade = 'B'; gradeTitle = 'Trust validation failed';
+    gradeSub = 'Certificate not trusted by OS store';
+  }
+
+  const gradeBox = document.getElementById('tls-grade-box');
+  gradeBox.textContent = grade;
+  gradeBox.className = `grade-box ${grade === 'A' ? 'A' : grade === 'B' ? 'B' : 'C'}`;
+  document.getElementById('tls-grade-title').textContent = gradeTitle;
+  document.getElementById('tls-grade-sub').textContent = gradeSub;
+
+  // ── Stage 3a: TLS Handshake ──
+  const tlsColor = tlsVer === 'TLS 1.3' ? 'good' : tlsVer === 'TLS 1.2' ? 'warn' : 'bad';
+  const cipherColor = cipher.includes('RC4') || cipher.includes('DES') ? 'bad' : '';
+  document.getElementById('tls-connection-kv').innerHTML = renderKV([
+    { k: 'Negotiated TLS',  v: tlsVer,          cls: tlsColor },
+    { k: 'Cipher Suite',    v: cipher,           cls: cipherColor },
+    { k: 'SNI Sent',        v: host,             cls: 'good' },
+    { k: 'Handshake Time',  v: `${res.latency_ms ? Math.round(res.latency_ms) : '—'}ms` },
+    { k: 'Target',          v: `${host}:${port}` },
+  ]);
+
+  // ── Certificate Details (mirrors sslCheck.ps1 Stage 3a) ──
+  const expiryLabel = daysLeft < 0
+    ? `EXPIRED (${Math.abs(daysLeft)} days ago)`
+    : `${daysLeft} days`;
+  const expiryColor = daysLeft < 0 ? 'bad' : daysLeft < 30 ? 'bad' : daysLeft < 90 ? 'warn' : 'good';
+  const sigAlg = cert.subject ? extractField(cert.subject, 'sigAlg') : '—';
+  const certType = cert.type || 'Unknown';
+
+  document.getElementById('tls-cert-kv').innerHTML = renderKV([
+    { k: 'Subject',         v: cert.subject  || '—' },
+    { k: 'Issuer',          v: cert.issuer   || '—' },
+    { k: 'Certificate Type',v: certType },
+    { k: 'Valid From',      v: cert.not_after ? 'See chain below' : '—' },
+    { k: 'Valid To',        v: cert.not_after || '—' },
+    { k: 'Days Remaining',  v: expiryLabel,    cls: expiryColor },
+    { k: 'Chain Valid',     v: res.trusted ? 'Yes' : 'No (self-signed / private CA)', cls: res.trusted ? 'good' : '' },
+  ]);
+
+  // ── SANs (mirrors sslCheck.ps1 grouped SAN display) ──
+  const sansEl = document.getElementById('tls-sans-panel');
+  const sans = res.sans || [host];
+  if (sans.length === 0) {
+    sansEl.innerHTML = '<span style="color:var(--text-muted)">None</span>';
+  } else {
+    // Group by root domain
+    const groups = {};
+    sans.forEach(s => {
+      const clean = s.replace(/^\*\./, '');
+      const parts = clean.split('.');
+      const root = parts.length >= 2 ? parts.slice(-2).join('.') : clean;
+      if (!groups[root]) groups[root] = [];
+      groups[root].push(s);
+    });
+    sansEl.innerHTML = `<div style="color:var(--text-dim);margin-bottom:6px">${sans.length} entries</div>` +
+      Object.entries(groups).map(([root, entries]) =>
+        `<div style="margin-bottom:4px">
+          <span style="color:var(--cyan);font-size:10px">${root}</span><br>
+          ${entries.map(e => `<span style="color:#fff;margin-right:8px">${e}</span>`).join('')}
+        </div>`
+      ).join('');
+  }
+
+  // ── Stage 3b: Trust Validation ──
+  document.getElementById('tls-trust-kv').innerHTML = renderKV([
+    {
+      k: 'OS Trust Store',
+      v: res.trusted ? 'PASS — Certificate trusted' : 'FAIL — Not trusted by OS',
+      cls: res.trusted ? 'good' : 'bad'
+    },
+    {
+      k: 'Trust Error',
+      v: res.trust_error || (res.trusted ? 'None' : 'Certificate not in trusted store'),
+      cls: res.trust_error ? 'bad' : 'good'
+    },
+    {
+      k: 'Assessment',
+      v: certType === 'Self-Signed'
+        ? 'Self-signed — expected for internal/test endpoints'
+        : certType === 'Publicly Trusted CA'
+        ? 'Issued by globally trusted CA'
+        : 'Issued by internal CA — normal in enterprise environments'
+    }
+  ]);
+
+  // ── Full Certificate Chain (mirrors sslCheck.ps1 chain display) ──
+  const chainEl = document.getElementById('cert-chain');
+  if (chain.length === 0) {
+    chainEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">Chain not available</div>';
+  } else {
+    chainEl.innerHTML = chain.map((c, i) => {
+      const isLeaf = i === 0;
+      const isRoot = i === chain.length - 1;
+      const label = isLeaf ? 'Leaf (end-entity)' : isRoot ? 'Root CA' : 'Intermediate CA';
+      const dLeft = c.days_left || 0;
+      const dColor = dLeft < 0 ? 'var(--red)' : dLeft < 30 ? 'var(--amber)' : 'var(--cyan)';
+      const indent = '  '.repeat(i);
+      return `
+        ${i > 0 ? `<div class="chain-arrow" style="padding-left:${i*16}px"><i class="fas fa-arrow-up"></i> signed by</div>` : ''}
+        <div class="chain-node" style="margin-left:${i*12}px;border-left:2px solid ${dColor}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span style="font-size:10px;background:rgba(0,210,255,0.1);color:var(--cyan);padding:2px 7px;border-radius:4px;letter-spacing:0.06em">[${i+1}] ${label}</span>
+            <span style="color:${dColor};font-size:10px;margin-left:auto">${dLeft < 0 ? 'EXPIRED' : dLeft + ' days'}</span>
+          </div>
+          <div class="kv-list">
+            ${renderKV([
+              { k: 'Subject',    v: c.subject || '—' },
+              { k: 'Issuer',     v: c.issuer  || '—' },
+              { k: 'Expires',    v: c.not_after || '—' },
+              { k: 'Type',       v: c.type || label },
+            ])}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Chain errors ──
+  const chainErrEl = document.getElementById('tls-chain-errors');
+  if (res.chain_errors && res.chain_errors.length > 0) {
+    chainErrEl.style.display = '';
+    chainErrEl.innerHTML = `
+      <div style="background:var(--red-dim);border:1px solid rgba(255,75,75,0.3);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--red)">
+        <i class="fas fa-exclamation-triangle"></i> <strong>Chain validation errors:</strong><br>
+        ${res.chain_errors.map(e => `<div style="margin-top:4px">• ${e}</div>`).join('')}
+      </div>`;
+  } else {
+    chainErrEl.style.display = 'none';
+  }
+
+  // ── Warnings (mirrors sslCheck.ps1 warning summary) ──
+  const warnEl = document.getElementById('tls-warnings');
+  if (warnings.length > 0) {
+    warnEl.style.display = '';
+    warnEl.innerHTML = `
+      <div class="section-label">Warnings</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${warnings.map(w => `
+          <div style="background:var(--amber-dim);border:1px solid rgba(255,179,0,0.3);border-radius:8px;padding:9px 12px;font-size:11px;color:var(--amber)">
+            <i class="fas fa-exclamation-triangle"></i> ${w}
+          </div>`).join('')}
+      </div>`;
+  } else {
+    warnEl.style.display = 'none';
+  }
+}
+
+// ── Certificate downloads (mirrors sslCheck.ps1 -ExportCerts) ──
+function renderCertDownloads(res, host) {
+  const panel = document.getElementById('tls-download-panel');
+  const btns  = document.getElementById('tls-download-btns');
+  const chain = res.chain || [];
+  if (chain.length === 0) return;
+
+  panel.style.display = '';
+
+  // Build PEM content for each cert in chain
+  const pemFiles = chain.map((c, i) => {
+    const label = i === 0 ? 'leaf' : i === chain.length - 1 ? 'root' : `intermediate_${i}`;
+    // We have the subject/issuer but not raw DER from our Go agent yet
+    // Generate a descriptive PEM placeholder with cert metadata
+    const meta = [
+      `# Certificate ${i + 1}: ${c.type || label}`,
+      `# Subject:  ${c.subject || '—'}`,
+      `# Issuer:   ${c.issuer  || '—'}`,
+      `# Expires:  ${c.not_after || '—'}`,
+      `# Days left: ${c.days_left || '—'}`,
+      `#`,
+      `# To get the full DER/PEM, run on the target VM:`,
+      `# openssl s_client -connect ${host}:443 -showcerts 2>/dev/null | openssl x509 -out ${label}.pem`,
+    ].join('\n');
+    return { label, content: meta, filename: `${label}.txt` };
+  });
+
+  // Chain summary file
+  const summaryLines = [
+    `# AzureSphere TLS Inspection Report`,
+    `# Target  : ${host}`,
+    `# Run at  : ${new Date().toISOString()}`,
+    `# TLS     : ${res.tls_version}`,
+    `# Cipher  : ${res.cipher_suite}`,
+    `# Trusted : ${res.trusted ? 'Yes' : 'No'}`,
+    ``,
+    ...chain.map((c, i) => [
+      `## [${i+1}] ${c.type || (i === 0 ? 'Leaf' : 'CA')}`,
+      `   Subject  : ${c.subject || '—'}`,
+      `   Issuer   : ${c.issuer  || '—'}`,
+      `   Expires  : ${c.not_after || '—'}`,
+      `   Days     : ${c.days_left || '—'}`,
+    ].join('\n'))
+  ].join('\n');
+
+  const allFiles = [
+    ...pemFiles,
+    { label: 'chain_report', content: summaryLines, filename: 'chain_report.txt' }
+  ];
+
+  btns.innerHTML = allFiles.map(f => `
+    <button class="btn-sm" onclick="downloadCert('${f.filename}', \`${f.content.replace(/`/g, '\\`')}\`)"
+      style="text-align:left;display:flex;align-items:center;gap:8px;padding:9px 12px">
+      <i class="fas fa-file-alt" style="color:var(--cyan)"></i>
+      <span>${f.filename}</span>
+      <i class="fas fa-download" style="margin-left:auto;opacity:0.5"></i>
+    </button>`).join('');
+}
+
+function downloadCert(filename, content) {
+  const blob = new Blob([content], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function extractField(str, field) { return str || '—'; }
 
 function renderTLSData(d) {
   document.getElementById('tls-empty').style.display = 'none';
