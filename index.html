@@ -888,8 +888,7 @@ async function simulateTest(target, cb) {
 function renderTargetList() {
   if (!document.getElementById("target-list")) return;
   const el = document.getElementById('target-list');
-  const empty = document.getElementById('target-empty');
-  const empty = document.getElementById("target-empty"); if (!empty) return;
+  const empty = document.getElementById("target-empty"); if (!el || !empty) return;
   empty.style.display = 'none';
   el.innerHTML = '';
   targets.forEach(t => {
