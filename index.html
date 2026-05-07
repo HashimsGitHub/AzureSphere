@@ -745,7 +745,7 @@ function selectProto(btn) {
 // ══════════════════════════════════════════════
 //  ADD TARGET + RUN TEST (F1)
 // ══════════════════════════════════════════════
-function addAndRun() {
+async function addAndRun() {
   const host  = document.getElementById('inp-host').value.trim();
   const port  = parseInt(document.getElementById('inp-port').value) || 443;
   const label = document.getElementById('inp-label').value.trim() || selectedProto;
@@ -769,7 +769,7 @@ function addAndRun() {
   btn.disabled = true; btn.classList.add('running');
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>&nbsp; Testing...';
 
-  simulateTest(target, () => {
+  await simulateTest(target, async () => {
     renderTargetList();
     renderPortCards();
     updateStats();
