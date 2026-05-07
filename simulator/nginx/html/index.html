@@ -407,7 +407,7 @@ sudo ss -tlnp | grep :${port}`;
 
 function copyConfig() {
   navigator.clipboard.writeText(document.getElementById('config-line').textContent).then(() => {
-    const btn = event.target.closest('button');
+    btn = btn || event.target.closest('button');
     const orig = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-check"></i>&nbsp; Copied';
     setTimeout(() => btn.innerHTML = orig, 2000);
@@ -422,7 +422,7 @@ function exportLog() {
   a.click();
 }
 
-async function clearDisplay() {
+async function clearDisplay(btn) {
   // Call server reset endpoint to wipe the real log
   try {
     const res = await fetch('/api/connections/reset', { method: 'POST' });
@@ -443,7 +443,7 @@ async function clearDisplay() {
   document.getElementById('log-count').textContent = 'cleared';
 
   // Change clear button to resume button
-  const btn = event.target.closest('button');
+  btn = btn || event.target.closest('button');
   btn.innerHTML = '<i class="fas fa-play"></i>&nbsp; Resume';
   btn.onclick = resumeRefresh;
   btn.style.color = 'var(--green)';
@@ -456,7 +456,7 @@ function resumeRefresh() {
   loadData();
 
   // Restore clear button
-  const btn = event.target.closest('button');
+  btn = btn || event.target.closest('button');
   btn.innerHTML = '<i class="fas fa-trash"></i>&nbsp; Clear';
   btn.onclick = clearDisplay;
   btn.style.color = '';
