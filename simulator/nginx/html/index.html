@@ -3,32 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AzureSphere | VM B — Target Simulator</title>
+<title>AzureSphere | Destination Host</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 :root {
-  --bg:       #080d12;
-  --bg2:      #0d1520;
-  --panel:    #0f1c28;
-  --border:   rgba(255,179,0,0.12);
-  --border2:  rgba(255,179,0,0.28);
-  --amber:    #ffb300;
-  --amber-dim:rgba(255,179,0,0.12);
+  --bg:        #080d12;
+  --bg2:       #0d1520;
+  --panel:     #0f1c28;
+  --border:    rgba(255,179,0,0.12);
+  --border2:   rgba(255,179,0,0.28);
+  --amber:     #ffb300;
+  --amber-dim: rgba(255,179,0,0.12);
   --amber-glow:rgba(255,179,0,0.3);
-  --green:    #00e676;
-  --green-dim:rgba(0,230,118,0.12);
-  --red:      #ff4b4b;
-  --red-dim:  rgba(255,75,75,0.12);
-  --cyan:     #00d2ff;
-  --cyan-dim: rgba(0,210,255,0.12);
-  --text:     #c8dce8;
-  --text-dim: #5a7a8e;
+  --green:     #00e676;
+  --green-dim: rgba(0,230,118,0.12);
+  --red:       #ff4b4b;
+  --red-dim:   rgba(255,75,75,0.12);
+  --cyan:      #00d2ff;
+  --cyan-dim:  rgba(0,210,255,0.12);
+  --text:      #c8dce8;
+  --text-dim:  #5a7a8e;
   --text-muted:#3a5566;
-  --mono:     'JetBrains Mono', monospace;
-  --sans:     'Syne', sans-serif;
-  --radius:   12px;
-  --radius-lg:18px;
+  --mono:      'JetBrains Mono', monospace;
+  --sans:      'Syne', sans-serif;
+  --radius:    12px;
+  --radius-lg: 18px;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:var(--mono); background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; }
@@ -40,7 +40,6 @@ body::before {
   background-size:40px 40px; pointer-events:none; z-index:0;
 }
 .wrap { max-width:1400px; margin:0 auto; padding:24px 28px; position:relative; z-index:1; }
-
 .header {
   display:flex; align-items:center; justify-content:space-between;
   margin-bottom:28px; padding-bottom:20px;
@@ -55,109 +54,78 @@ body::before {
 }
 .logo-text h1 { font-family:var(--sans); font-size:22px; font-weight:700; color:#fff; letter-spacing:-0.02em; }
 .logo-text .sub { font-size:11px; color:var(--text-dim); letter-spacing:0.12em; text-transform:uppercase; margin-top:2px; }
-.vm-badge {
+.role-badge {
   display:inline-flex; align-items:center; gap:6px; padding:4px 12px;
   background:var(--amber-dim); border:1px solid var(--border2);
-  border-radius:20px; font-size:11px; color:var(--amber); font-family:var(--sans); font-weight:600;
-  letter-spacing:0.08em; margin-left:10px;
+  border-radius:20px; font-size:11px; color:var(--amber);
+  font-family:var(--sans); font-weight:600; letter-spacing:0.08em; margin-left:10px;
 }
 .pill { display:flex; align-items:center; gap:7px; padding:7px 14px; border-radius:40px; border:1px solid var(--border); font-size:12px; color:var(--text-dim); }
 .dot { width:6px; height:6px; border-radius:50%; background:var(--green); animation:blink 2s infinite; }
+.dot.red { background:var(--red); }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
 .stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:24px; }
 .stat { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; display:flex; align-items:center; gap:14px; }
 .stat-icon { font-size:20px; color:var(--amber); opacity:0.8; width:32px; text-align:center; }
 .stat-body .label { font-size:10px; color:var(--text-muted); letter-spacing:0.1em; text-transform:uppercase; font-family:var(--sans); }
 .stat-body .value { font-size:22px; font-weight:600; color:#fff; margin-top:2px; font-family:var(--sans); }
 .stat-body .sub { font-size:11px; color:var(--green); margin-top:2px; }
-
 .main-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-@media(max-width:900px) { .main-grid { grid-template-columns:1fr; } }
-
+@media(max-width:960px) { .main-grid { grid-template-columns:1fr; } }
 .panel { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; }
-.panel-title { font-family:var(--sans); font-size:14px; font-weight:600; color:#fff; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+.panel-title { font-family:var(--sans); font-size:14px; font-weight:600; color:#fff; margin-bottom:16px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .panel-title i { color:var(--amber); font-size:14px; }
-
 .section-label {
   font-size:10px; letter-spacing:0.16em; text-transform:uppercase;
   color:var(--text-muted); font-family:var(--sans); font-weight:600;
   margin-bottom:12px; display:flex; align-items:center; gap:8px;
 }
 .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
-
-.persona-card {
+.service-card {
   background:var(--bg); border:1px solid var(--border);
   border-radius:var(--radius); padding:14px 16px; margin-bottom:10px;
   border-left:3px solid var(--amber); transition:border-color .2s;
 }
-.persona-card:hover { border-color:var(--border2); }
-.persona-card:last-child { margin-bottom:0; }
-.pc-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-.pc-name { font-size:14px; font-weight:500; color:#fff; font-family:var(--sans); }
-.pc-port {
-  font-size:12px; color:var(--amber); font-family:var(--mono);
-  background:var(--amber-dim); padding:2px 8px; border-radius:4px;
-  border:1px solid rgba(255,179,0,0.2);
-}
-.pc-proto { font-size:11px; color:var(--text-dim); }
-.pc-status { display:flex; align-items:center; gap:6px; font-size:11px; }
-.status-dot { width:6px; height:6px; border-radius:50%; }
-.status-dot.active { background:var(--green); box-shadow:0 0 6px var(--green); animation:blink 2s infinite; }
-.pc-connects { font-size:10px; color:var(--text-muted); margin-top:4px; }
-
+.service-card:hover { border-color:var(--border2); }
+.service-card:last-child { margin-bottom:0; }
+.sc-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.sc-name { font-size:14px; font-weight:500; color:#fff; font-family:var(--sans); }
+.sc-port { font-size:12px; color:var(--amber); font-family:var(--mono); background:var(--amber-dim); padding:2px 8px; border-radius:4px; border:1px solid rgba(255,179,0,0.2); }
+.sc-bottom { display:flex; align-items:center; justify-content:space-between; }
+.proto-tag { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:500; background:var(--cyan-dim); color:var(--cyan); border:1px solid rgba(0,210,255,0.2); }
+.listening { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--green); }
+.listening-dot { width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 6px var(--green); animation:blink 2s infinite; }
+.sc-hits { font-size:10px; color:var(--text-muted); margin-top:5px; }
 .conn-table { width:100%; border-collapse:collapse; font-size:11px; }
-.conn-table th {
-  text-align:left; padding:8px 10px; color:var(--text-muted);
-  font-size:10px; letter-spacing:0.06em; text-transform:uppercase;
-  border-bottom:1px solid var(--border); font-family:var(--sans);
-}
+.conn-table th { text-align:left; padding:8px 10px; color:var(--text-muted); font-size:10px; letter-spacing:0.06em; text-transform:uppercase; border-bottom:1px solid var(--border); font-family:var(--sans); }
 .conn-table td { padding:9px 10px; border-bottom:1px solid rgba(255,179,0,0.05); vertical-align:middle; }
 .conn-table tr:last-child td { border-bottom:none; }
 .conn-table tr:hover td { background:rgba(255,179,0,0.03); }
-.log-wrap { max-height:400px; overflow-y:auto; }
-
-::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
-
-.proto-tag {
-  display:inline-block; padding:2px 7px; border-radius:4px;
-  font-size:10px; font-weight:500;
-  background:var(--cyan-dim); color:var(--cyan);
-  border:1px solid rgba(0,210,255,0.2);
-}
-.ip-tag {
-  display:inline-block; padding:2px 7px; border-radius:4px;
-  font-size:10px; background:var(--green-dim); color:var(--green);
-  border:1px solid rgba(0,230,118,0.2);
-}
-.empty { text-align:center; padding:30px 20px; color:var(--text-muted); font-size:12px; }
-.empty i { font-size:24px; display:block; margin-bottom:10px; opacity:0.3; }
-
-.add-persona-form { margin-top:16px; }
-.inp {
-  background:var(--bg); border:1px solid var(--border); border-radius:8px;
-  padding:9px 12px; font-family:var(--mono); font-size:12px; color:#fff;
-  outline:none; transition:border-color .2s; width:100%;
-}
+.conn-table tr.new-row td { animation:flash .8s ease-out; }
+@keyframes flash { 0%{background:rgba(255,179,0,0.12)} 100%{background:transparent} }
+.log-wrap { max-height:520px; overflow-y:auto; }
+.ip-tag { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; background:var(--green-dim); color:var(--green); border:1px solid rgba(0,230,118,0.2); }
+.inp { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 12px; font-family:var(--mono); font-size:12px; color:#fff; outline:none; transition:border-color .2s; width:100%; }
 .inp:focus { border-color:var(--amber); }
 .inp::placeholder { color:var(--text-muted); }
 .input-row { display:flex; gap:8px; margin-bottom:8px; }
 .inp-sm { width:100px; flex-shrink:0; }
-.btn {
-  padding:9px 16px; border-radius:8px; font-family:var(--sans);
-  font-size:12px; font-weight:600; border:none; cursor:pointer;
-  letter-spacing:0.05em; transition:all .2s;
-}
-.btn-amber { background:var(--amber); color:#000; }
+.btn { padding:9px 16px; border-radius:8px; font-family:var(--sans); font-size:12px; font-weight:600; border:none; cursor:pointer; letter-spacing:0.05em; transition:all .2s; }
+.btn-amber { background:var(--amber); color:#000; width:100%; }
 .btn-amber:hover { background:#ffc933; box-shadow:0 0 16px var(--amber-glow); }
-.btn-ghost { background:transparent; color:var(--text-dim); border:1px solid var(--border); }
+.btn-ghost { background:transparent; color:var(--text-dim); border:1px solid var(--border); padding:7px 14px; cursor:pointer; border-radius:8px; font-family:var(--sans); font-size:12px; }
 .btn-ghost:hover { color:#fff; border-color:var(--border2); }
-
-.footer {
-  margin-top:40px; padding-top:20px; border-top:1px solid var(--border);
-  display:flex; justify-content:space-between; align-items:center;
-  font-size:11px; color:var(--text-muted); flex-wrap:wrap; gap:12px;
-}
+.code-block { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 14px; font-size:11px; color:var(--amber); overflow-x:auto; white-space:pre; line-height:1.7; margin-top:10px; font-family:var(--mono); }
+.kv { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--border); font-size:12px; }
+.kv:last-child { border-bottom:none; }
+.kv .k { color:var(--text-dim); }
+.kv .v { color:#fff; font-weight:500; text-align:right; }
+.kv .v.good { color:var(--green); }
+.empty { text-align:center; padding:30px 20px; color:var(--text-muted); font-size:12px; }
+.empty i { font-size:24px; display:block; margin-bottom:10px; opacity:0.3; }
+::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+.api-offline { background:var(--red-dim); border:1px solid rgba(255,75,75,0.3); border-radius:8px; padding:12px 16px; font-size:12px; color:var(--red); display:none; margin-bottom:16px; }
+.footer { margin-top:40px; padding-top:20px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-muted); flex-wrap:wrap; gap:12px; }
 .footer a { color:var(--text-muted); text-decoration:none; }
 .footer a:hover { color:var(--amber); }
 </style>
@@ -169,125 +137,148 @@ body::before {
   <div class="logo">
     <div class="logo-mark"><i class="fas fa-server"></i></div>
     <div class="logo-text">
-      <h1>AzureSphere <span class="vm-badge">VM B</span></h1>
-      <div class="sub">Target Simulator — Enterprise Service Personas</div>
+      <h1>AzureSphere <span class="role-badge">Destination Host</span></h1>
+      <div class="sub">Enterprise Service Endpoint · Multi-Protocol Listener</div>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <div class="pill"><span class="dot"></span> Simulator Online</div>
-    <div class="pill"><i class="fas fa-server" style="font-size:10px;color:var(--amber)"></i> <span id="vm-hostname">—</span></div>
-    <div class="pill" id="clock"><i class="far fa-clock" style="font-size:10px"></i> —</div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div class="pill" id="online-pill"><span class="dot"></span> Services Online</div>
+    <div class="pill"><i class="fas fa-server" style="font-size:10px;color:var(--amber)"></i>&nbsp;<span id="vm-hostname">—</span></div>
+    <div class="pill"><i class="fas fa-clock" style="font-size:10px"></i>&nbsp;<span id="clock">—</span></div>
   </div>
+</div>
+
+<div class="api-offline" id="api-offline-banner">
+  <i class="fas fa-exclamation-triangle"></i>
+  Service API unreachable — verify containers are running: <code>sudo docker-compose ps</code>
 </div>
 
 <div class="stats-row">
   <div class="stat">
-    <div class="stat-icon"><i class="fas fa-masks-theater"></i></div>
+    <div class="stat-icon"><i class="fas fa-network-wired"></i></div>
     <div class="stat-body">
-      <div class="label">Active Personas</div>
-      <div class="value" id="stat-personas">—</div>
-      <div class="sub">Service simulators</div>
+      <div class="label">Active Services</div>
+      <div class="value" id="stat-services">—</div>
+      <div class="sub" id="stat-services-sub">Loading...</div>
     </div>
   </div>
   <div class="stat">
-    <div class="stat-icon"><i class="fas fa-plug"></i></div>
+    <div class="stat-icon"><i class="fas fa-exchange-alt"></i></div>
     <div class="stat-body">
       <div class="label">Total Connections</div>
       <div class="value" id="stat-connects">—</div>
-      <div class="sub">From VM A</div>
+      <div class="sub" id="stat-connects-sub">Since last restart</div>
     </div>
   </div>
   <div class="stat">
-    <div class="stat-icon"><i class="fas fa-clock"></i></div>
+    <div class="stat-icon"><i class="fas fa-stopwatch"></i></div>
     <div class="stat-body">
       <div class="label">Uptime</div>
       <div class="value" id="stat-uptime">—</div>
-      <div class="sub">Simulator running</div>
+      <div class="sub">Service runtime</div>
     </div>
   </div>
   <div class="stat">
-    <div class="stat-icon"><i class="fas fa-network-wired"></i></div>
+    <div class="stat-icon"><i class="fas fa-history"></i></div>
     <div class="stat-body">
-      <div class="label">Last Connection</div>
-      <div class="value" id="stat-last">—</div>
-      <div class="sub" id="stat-last-sub">—</div>
+      <div class="label">Last Inbound</div>
+      <div class="value" id="stat-last-service">—</div>
+      <div class="sub" id="stat-last-time">Awaiting connection</div>
     </div>
   </div>
 </div>
 
 <div class="main-grid">
 
-  <div>
+  <div style="display:flex;flex-direction:column;gap:20px">
+
     <div class="panel">
-      <div class="panel-title"><i class="fas fa-masks-theater"></i> Active Personas</div>
-      <div class="section-label">Listening on these ports</div>
-      <div id="persona-list">
-        <div class="empty"><i class="fas fa-circle-notch fa-spin"></i>Loading personas...</div>
+      <div class="panel-title">
+        <i class="fas fa-layer-group"></i> Active Services
+        <span id="services-count" style="margin-left:auto;font-size:11px;color:var(--text-muted);font-family:var(--mono)"></span>
+      </div>
+      <div id="service-list">
+        <div class="empty"><i class="fas fa-circle-notch fa-spin"></i>Connecting to service API...</div>
       </div>
     </div>
 
-    <div class="panel" style="margin-top:20px">
-      <div class="panel-title"><i class="fas fa-plus-circle"></i> Add New Persona</div>
-      <div class="section-label">Define a custom service to simulate</div>
-      <div class="add-persona-form">
-        <div class="input-row">
-          <input class="inp" id="new-name" placeholder="Persona name (e.g. Oracle DB)" />
-          <input class="inp inp-sm" id="new-port" placeholder="Port" type="number" />
-        </div>
-        <div class="input-row">
-          <select class="inp" id="new-proto">
-            <option value="TCP">Generic TCP</option>
-            <option value="SQL">SQL Server (TDS)</option>
-            <option value="POSTGRES">PostgreSQL</option>
-            <option value="FTP">FTP</option>
-            <option value="RABBITMQ">RabbitMQ (AMQP)</option>
-            <option value="HANA">SAP HANA</option>
-            <option value="WEBMETHODS">webMethods IS</option>
-            <option value="SMB">SMB</option>
-          </select>
-          <input class="inp" id="new-banner" placeholder="Custom banner (optional)" />
-        </div>
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
-          <i class="fas fa-info-circle"></i>
-          New personas require adding to <code>docker-compose.yml</code> PERSONA_n env var and restarting.
-          This form shows you the config line to add.
-        </div>
-        <button class="btn btn-amber" onclick="generatePersonaConfig()">
-          <i class="fas fa-code"></i> Generate Config Line
-        </button>
+    <div class="panel">
+      <div class="panel-title"><i class="fas fa-info-circle"></i> Host Information</div>
+      <div class="kv"><span class="k">Hostname</span><span class="v" id="info-hostname">—</span></div>
+      <div class="kv"><span class="k">Role</span><span class="v good">Destination Host</span></div>
+      <div class="kv"><span class="k">API</span><span class="v" style="color:var(--cyan);font-size:10px">/api/status · /api/personas · /api/connections</span></div>
+      <div class="kv"><span class="k">Auto-refresh</span><span class="v good">Every 5 seconds</span></div>
+      <div class="kv"><span class="k">Last refreshed</span><span class="v" id="info-updated">—</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><i class="fas fa-plus-circle"></i> Add New Service</div>
+      <div class="section-label">Configure additional endpoint</div>
+      <div class="input-row">
+        <input class="inp" id="new-name" placeholder="Service name (e.g. Oracle DB)" />
+        <input class="inp inp-sm" id="new-port" placeholder="Port" type="number" />
       </div>
-      <div id="config-output" style="display:none;margin-top:14px">
-        <div class="section-label">Add this to docker-compose.yml</div>
-        <pre id="config-line" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;color:var(--amber);overflow-x:auto;white-space:pre-wrap"></pre>
-        <button class="btn btn-ghost" style="margin-top:8px" onclick="copyConfig()">
-          <i class="fas fa-copy"></i> Copy
+      <div class="input-row">
+        <select class="inp" id="new-proto" style="cursor:pointer">
+          <option value="TCP">Generic TCP</option>
+          <option value="SQL">SQL Server (TDS)</option>
+          <option value="POSTGRES">PostgreSQL</option>
+          <option value="FTP">FTP</option>
+          <option value="RABBITMQ">RabbitMQ (AMQP)</option>
+          <option value="HANA">SAP HANA</option>
+          <option value="WEBMETHODS">webMethods IS</option>
+          <option value="SMB">SMB</option>
+        </select>
+        <input class="inp" id="new-banner" placeholder="Custom banner (optional)" />
+      </div>
+      <button class="btn btn-amber" onclick="generateServiceConfig()">
+        <i class="fas fa-code"></i>&nbsp; Generate docker-compose config
+      </button>
+      <div id="config-output" style="display:none">
+        <div class="section-label" style="margin-top:14px">Add to simulator/docker-compose.yml</div>
+        <div class="code-block" id="config-line"></div>
+        <button class="btn-ghost" style="margin-top:8px" onclick="copyConfig()">
+          <i class="fas fa-copy"></i>&nbsp; Copy
         </button>
       </div>
     </div>
+
   </div>
 
   <div>
     <div class="panel">
-      <div class="panel-title"><i class="fas fa-list-alt"></i> Live Connection Log</div>
-      <div class="section-label">Connections received from VM A</div>
+      <div class="panel-title">
+        <i class="fas fa-stream"></i> Live Connection Log
+        <span id="log-count" style="margin-left:auto;font-size:11px;color:var(--text-muted);font-family:var(--mono)"></span>
+        <button class="btn-ghost" onclick="loadData()" style="padding:4px 10px;font-size:11px">
+          <i class="fas fa-sync"></i>
+        </button>
+      </div>
+      <div class="section-label">Real inbound connections received on this host</div>
       <div class="log-wrap">
         <table class="conn-table">
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Persona</th>
+              <th>Timestamp</th>
+              <th>Service</th>
               <th>Protocol</th>
               <th>Source IP</th>
+              <th>Port</th>
             </tr>
           </thead>
           <tbody id="conn-log">
-            <tr><td colspan="4" class="empty"><i class="fas fa-satellite-dish"></i><br>No connections yet — run tests from VM A</td></tr>
+            <tr><td colspan="5" class="empty">
+              <i class="fas fa-satellite-dish"></i><br>
+              No inbound connections yet<br>
+              <span style="font-size:10px">Run connectivity tests from the source host to see entries here</span>
+            </td></tr>
           </tbody>
         </table>
       </div>
-      <div style="margin-top:12px;display:flex;gap:8px">
-        <button class="btn btn-ghost" onclick="loadData()"><i class="fas fa-sync"></i> Refresh</button>
-        <button class="btn btn-ghost" onclick="exportLog()"><i class="fas fa-download"></i> Export JSON</button>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn-ghost" onclick="exportLog()"><i class="fas fa-download"></i>&nbsp; Export JSON</button>
+        <button class="btn-ghost" onclick="clearDisplay()"><i class="fas fa-trash"></i>&nbsp; Clear display</button>
+        <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">Refreshes every 5s</span>
       </div>
     </div>
   </div>
@@ -295,140 +286,150 @@ body::before {
 </div>
 
 <div class="footer">
-  <div>© 2026 AzureSphere · VM B Target Simulator · All personas are non-destructive simulators</div>
-  <div style="display:flex;gap:20px">
-    <a href="https://github.com/HashimsGitHub/AzureSphere" target="_blank"><i class="fab fa-github"></i> GitHub</a>
-  </div>
+  <div>© 2026 AzureSphere · Enterprise Connectivity Diagnostic Platform</div>
+  <div><a href="https://github.com/HashimsGitHub/AzureSphere" target="_blank"><i class="fab fa-github"></i> GitHub</a></div>
 </div>
 
 </div>
-
 <script>
-const API_BASE = '/api';
-let connData = [];
+const API = '/api';
+let connData = [], prevCount = 0;
 
-// Clock
-function tick() {
-  const now = new Date();
-  document.getElementById('clock').innerHTML =
-    `<i class="far fa-clock" style="font-size:10px"></i> ` +
-    now.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-}
-tick(); setInterval(tick, 1000);
+setInterval(() => {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}, 1000);
 
-// Load all data from persona API (proxied through nginx)
 async function loadData() {
   try {
-    const [statusRes, personasRes, connsRes] = await Promise.all([
-      fetch(`${API_BASE}/status`).then(r=>r.json()),
-      fetch(`${API_BASE}/personas`).then(r=>r.json()),
-      fetch(`${API_BASE}/connections`).then(r=>r.json()),
+    const [status, personas, conns] = await Promise.all([
+      fetch(`${API}/status`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch(`${API}/personas`).then(r => r.json()),
+      fetch(`${API}/connections`).then(r => r.json()),
     ]);
-    renderStatus(statusRes);
-    renderPersonas(personasRes, connsRes);
-    renderConnLog(connsRes);
-    connData = connsRes;
+    document.getElementById('api-offline-banner').style.display = 'none';
+    document.getElementById('online-pill').innerHTML = '<span class="dot"></span> Services Online';
+    renderStatus(status);
+    renderServices(personas, conns);
+    renderLog(conns);
+    connData = conns || [];
+    document.getElementById('info-updated').textContent = new Date().toLocaleTimeString();
   } catch(e) {
-    console.warn('API not reachable yet:', e.message);
-    renderOffline();
+    document.getElementById('api-offline-banner').style.display = '';
+    document.getElementById('online-pill').innerHTML = '<span class="dot red"></span> API Offline';
+    document.getElementById('service-list').innerHTML =
+      '<div class="empty"><i class="fas fa-exclamation-triangle" style="color:var(--red)"></i><br>Cannot reach service API<br><span style="font-size:10px">sudo docker-compose ps</span></div>';
   }
 }
 
 function renderStatus(s) {
   document.getElementById('vm-hostname').textContent = s.hostname || window.location.hostname;
-  document.getElementById('stat-personas').textContent = s.persona_count || '—';
-  document.getElementById('stat-connects').textContent = s.total_connects || 0;
-  document.getElementById('stat-uptime').textContent = s.uptime || '—';
+  document.getElementById('info-hostname').textContent = s.hostname || window.location.hostname;
+  document.getElementById('stat-services').textContent = s.persona_count ?? '—';
+  document.getElementById('stat-services-sub').textContent = `${s.persona_count || 0} protocol endpoint${s.persona_count !== 1 ? 's' : ''} active`;
+  document.getElementById('stat-connects').textContent = s.total_connects ?? '—';
+  document.getElementById('stat-connects-sub').textContent = s.total_connects > 0 ? 'connections processed' : 'awaiting first connection';
+  document.getElementById('stat-uptime').textContent = (s.uptime || '—').replace('h', 'h ').replace('m', 'm').trim();
 }
 
-function renderPersonas(personas, conns) {
-  const el = document.getElementById('persona-list');
+function renderServices(personas, conns) {
+  const el = document.getElementById('service-list');
   if (!personas || personas.length === 0) {
-    el.innerHTML = '<div class="empty"><i class="fas fa-exclamation-triangle"></i>No personas found — check PERSONA_n env vars in docker-compose.yml</div>';
+    el.innerHTML = '<div class="empty"><i class="fas fa-exclamation-triangle"></i><br>No services configured<br><span style="font-size:10px">Add PERSONA_n env vars in docker-compose.yml</span></div>';
     return;
   }
+  document.getElementById('services-count').textContent = `${personas.length} active`;
   el.innerHTML = personas.map(p => {
-    const myConns = (conns||[]).filter(c => c.port === p.port).length;
-    return `<div class="persona-card">
-      <div class="pc-top">
-        <span class="pc-name">${p.name}</span>
-        <span class="pc-port">:${p.port}</span>
+    const hits = (conns || []).filter(c => c.port === p.port).length;
+    const lastHit = (conns || []).find(c => c.port === p.port);
+    const lastTime = lastHit ? new Date(lastHit.time).toLocaleTimeString() : null;
+    return `<div class="service-card">
+      <div class="sc-top">
+        <span class="sc-name">${esc(p.name)}</span>
+        <span class="sc-port">:${p.port}</span>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <span class="pc-proto"><span class="proto-tag">${p.protocol}</span></span>
-        <div class="pc-status">
-          <span class="status-dot active"></span>
-          <span style="color:var(--green);font-size:11px">Listening</span>
-        </div>
+      <div class="sc-bottom">
+        <span class="proto-tag">${esc(p.protocol)}</span>
+        <div class="listening"><span class="listening-dot"></span> Listening</div>
       </div>
-      <div class="pc-connects">${myConns} connection${myConns!==1?'s':''} received</div>
+      <div class="sc-hits">${hits > 0 ? `${hits} connection${hits!==1?'s':''} · last at ${lastTime}` : 'No connections received yet'}</div>
     </div>`;
   }).join('');
-
-  // update last connection stat
   if (conns && conns.length > 0) {
     const last = conns[0];
-    document.getElementById('stat-last').textContent = last.persona.split(' ')[0];
-    const t = new Date(last.time);
-    document.getElementById('stat-last-sub').textContent = t.toLocaleTimeString();
+    document.getElementById('stat-last-service').textContent = last.persona || '—';
+    document.getElementById('stat-last-time').textContent = new Date(last.time).toLocaleTimeString();
   }
 }
 
-function renderConnLog(conns) {
+function renderLog(conns) {
   const tbody = document.getElementById('conn-log');
+  document.getElementById('log-count').textContent = conns && conns.length > 0 ? `${conns.length} records` : '';
   if (!conns || conns.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty"><i class="fas fa-satellite-dish"></i><br>No connections yet — run tests from VM A</td></tr>';
-    return;
+    tbody.innerHTML = `<tr><td colspan="5" class="empty"><i class="fas fa-satellite-dish"></i><br>No inbound connections yet<br><span style="font-size:10px">Run tests from the source host</span></td></tr>`;
+    prevCount = 0; return;
   }
-  tbody.innerHTML = conns.map(c => {
-    const t = new Date(c.time);
-    return `<tr>
-      <td style="color:var(--text-muted)">${t.toLocaleTimeString()}</td>
-      <td style="color:#fff">${c.persona}</td>
-      <td><span class="proto-tag">${c.protocol}</span></td>
-      <td><span class="ip-tag">${c.remote_ip.split(':')[0]}</span></td>
+  const newCount = conns.length;
+  tbody.innerHTML = conns.map((c, i) => {
+    const isNew = i < (newCount - prevCount) && prevCount > 0;
+    const ts = new Date(c.time);
+    const srcIP = (c.remote_ip || '—').split(':')[0];
+    return `<tr class="${isNew ? 'new-row' : ''}">
+      <td style="color:var(--text-muted);white-space:nowrap">${ts.toLocaleDateString('en-AU',{day:'2-digit',month:'short'})} ${ts.toLocaleTimeString()}</td>
+      <td style="color:#fff;font-weight:500">${esc(c.persona || '—')}</td>
+      <td><span class="proto-tag">${esc(c.protocol || '—')}</span></td>
+      <td><span class="ip-tag">${esc(srcIP)}</span></td>
+      <td style="color:var(--amber);font-family:var(--mono)">:${c.port || '—'}</td>
     </tr>`;
   }).join('');
+  prevCount = newCount;
 }
 
-function renderOffline() {
-  document.getElementById('persona-list').innerHTML =
-    '<div class="empty"><i class="fas fa-exclamation-triangle" style="color:var(--amber)"></i><br>Persona API not reachable<br><span style="font-size:10px">API runs on :9090 proxied via nginx</span></div>';
-}
-
-// Add persona config generator
-function generatePersonaConfig() {
-  const name  = document.getElementById('new-name').value.trim();
-  const port  = document.getElementById('new-port').value.trim();
+function generateServiceConfig() {
+  const name = document.getElementById('new-name').value.trim();
+  const port = document.getElementById('new-port').value.trim();
   const proto = document.getElementById('new-proto').value;
-  const banner= document.getElementById('new-banner').value.trim();
-  if (!name || !port) { alert('Name and port are required'); return; }
-
-  // Find next available PERSONA_n number
-  const n = Math.floor(Math.random() * 90) + 10;
-  const line = `      PERSONA_${n}: "${name}:${proto}:${port}:${banner}"`;
-
+  const banner = document.getElementById('new-banner').value.trim();
+  if (!name || !port) { document.getElementById('new-name').focus(); return; }
+  const n = Math.floor(Math.random() * 40) + 10;
   document.getElementById('config-output').style.display = '';
   document.getElementById('config-line').textContent =
-    `# In simulator/docker-compose.yml, under persona-api → environment:\n${line}\n\n# Then restart:\nsudo docker-compose restart persona-api`;
+`# 1. Edit simulator/docker-compose.yml
+#    Under: persona-api → environment:
+      PERSONA_${n}: "${name}:${proto}:${port}:${banner}"
+
+# 2. Restart (zero downtime for other services):
+sudo docker-compose restart persona-api
+
+# 3. Verify listening:
+sudo ss -tlnp | grep :${port}`;
 }
 
 function copyConfig() {
-  const text = document.getElementById('config-line').textContent;
-  navigator.clipboard.writeText(text).then(() => {
+  navigator.clipboard.writeText(document.getElementById('config-line').textContent).then(() => {
     const btn = event.target.closest('button');
-    btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-    setTimeout(() => btn.innerHTML = '<i class="fas fa-copy"></i> Copy', 2000);
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-check"></i>&nbsp; Copied';
+    setTimeout(() => btn.innerHTML = orig, 2000);
   });
 }
 
 function exportLog() {
   const blob = new Blob([JSON.stringify(connData, null, 2)], {type:'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = `vmb-connections-${Date.now()}.json`; a.click();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `azuresphere-connections-${Date.now()}.json`;
+  a.click();
 }
 
-// Load on start, refresh every 5s
+function clearDisplay() {
+  prevCount = 0;
+  document.getElementById('conn-log').innerHTML =
+    '<tr><td colspan="5" class="empty"><i class="fas fa-satellite-dish"></i><br>Display cleared — live data resumes on next refresh</td></tr>';
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 loadData();
 setInterval(loadData, 5000);
 </script>
