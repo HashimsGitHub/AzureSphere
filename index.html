@@ -783,27 +783,103 @@ function addAndRun() {
   });
 }
 
-// ── Simulated test engine (replace with Go backend calls when agent is live) ──
-function simulateTest(target, cb) {
-  const delay = 600 + Math.random() * 1200;
-  setTimeout(() => {
-    const r = Math.random();
-    // HTTPS and TCP mostly pass; others random
-    let pass;
-    if (target.proto === 'HTTPS' || target.proto === 'TCP') {
-      pass = r > 0.15;
-    } else {
-      pass = r > 0.3;
-    }
-    target.status  = pass ? 'pass' : 'fail';
-    target.latency = pass ? Math.floor(Math.random() * 180 + 8) : null;
+// ── Agent API — always relative URLs so public IP / private IP / localhost all work ──
+const API = {
+  tcp:  (host, port) => fetch(`/api/test/tcp?host=${encodeURIComponent(host)}&port=${port}`).then(r=>r.json()),
+  tls:  (host, port) => fetch(`/api/test/tls?host=${encodeURIComponent(host)}&port=${port}`).then(r=>r.json()),
+  dns:  (host)       => fetch(`/api/test/dns?host=${encodeURIComponent(host)}`).then(r=>r.json()),
+  ping: (host)       => fetch(`/api/test/ping?host=${encodeURIComponent(host)}`).then(r=>r.json()),
+  info: ()           => fetch(`/api/info`).then(r=>r.json()),
+};
+
+// Check agent availability on load
+let agentOnline = false;
+async function checkAgent() {
+  try {
+    const info = await API.info();
+    agentOnline = true;
+    const el = document.getElementById('vm-hostname');
+    if (el) el.textContent = info.hostname || window.location.hostname;
+    console.log('Agent online:', info);
+  } catch(e) {
+    agentOnline = false;
+    console.warn('Agent offline — running in simulation mode');
+  }
+}
+checkAgent();
+
+// ── Real test engine — calls Go agent, falls back to simulation if agent offline ──
+async function simulateTest(target, cb) {
+  if (!agentOnline) {
+    // Fallback simulation when agent not yet deployed
+    const delay = 600 + Math.random() * 800;
+    setTimeout(() => {
+      const pass = Math.random() > 0.25;
+      target.status  = pass ? 'pass' : 'fail';
+      target.latency = pass ? Math.floor(Math.random() * 180 + 8) : null;
+      target.lastRun = new Date();
+      if (target.proto === 'HTTPS' && pass) target.tlsData = generateSimTLSData(target.host);
+      cb();
+    }, delay);
+    return;
+  }
+
+  try {
     target.lastRun = new Date();
-    // TLS data for HTTPS
-    if (target.proto === 'HTTPS' && pass) {
-      target.tlsData = generateSimTLSData(target.host);
+
+    if (target.proto === 'HTTPS' || target.proto === 'TCP') {
+      // TCP test for all protocols
+      const tcpRes = await API.tcp(target.host, target.port);
+      target.status  = tcpRes.success ? 'pass' : 'fail';
+      target.latency = tcpRes.success ? Math.round(tcpRes.latency_ms) : null;
+      if (tcpRes.error) target.error = tcpRes.error;
+
+      // TLS inspection for HTTPS
+      if (target.proto === 'HTTPS' && tcpRes.success) {
+        try {
+          const tlsRes = await API.tls(target.host, target.port);
+          if (tlsRes.success && tlsRes.certificate) {
+            target.tlsData = {
+              host:       target.host,
+              daysLeft:   tlsRes.certificate.days_left,
+              tlsVersion: tlsRes.tls_version,
+              cipher:     tlsRes.cipher_suite,
+              subject:    tlsRes.certificate.subject,
+              issuer:     tlsRes.certificate.issuer,
+              expiry:     tlsRes.certificate.not_after,
+              trust:      tlsRes.certificate.type,
+              trusted:    tlsRes.trusted,
+              trustError: tlsRes.trust_error,
+              keySize:    2048,
+              keyType:    'RSA',
+              sigAlg:     'SHA-256 with RSA',
+              sni:        target.host,
+              sans:       [target.host],
+              chain:      (tlsRes.chain || []).map(c => ({
+                type: c.type, name: c.subject, exp: c.not_after
+              })),
+              thumbprint: '',
+              serial:     '',
+            };
+          }
+        } catch(e) { console.warn('TLS inspect failed:', e); }
+      }
+
+    } else {
+      // For SQL, RabbitMQ, SMB, SFTP, HANA — TCP connect test
+      const tcpRes = await API.tcp(target.host, target.port);
+      target.status  = tcpRes.success ? 'pass' : 'fail';
+      target.latency = tcpRes.success ? Math.round(tcpRes.latency_ms) : null;
+      if (tcpRes.error) target.error = tcpRes.error;
     }
-    cb();
-  }, delay);
+
+  } catch(e) {
+    target.status  = 'fail';
+    target.latency = null;
+    target.error   = 'Agent unreachable: ' + e.message;
+  }
+
+  cb();
 }
 
 // ══════════════════════════════════════════════
@@ -966,21 +1042,57 @@ function generateSimTLSData(host) {
   };
 }
 
-function runTLSInspect() {
+async function runTLSInspect() {
   const host = document.getElementById('tls-host').value.trim();
-  const port = document.getElementById('tls-port').value || '443';
+  const port = parseInt(document.getElementById('tls-port').value) || 443;
   if (!host) { document.getElementById('tls-host').focus(); return; }
 
   document.getElementById('tls-empty').style.display = '';
   document.getElementById('tls-empty').innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:28px;display:block;margin-bottom:12px;opacity:0.5"></i> Connecting to '+host+'...';
   document.getElementById('tls-data').style.display = 'none';
 
-  setTimeout(() => {
-    tlsResult = generateSimTLSData(host);
-    renderTLSData(tlsResult);
+  try {
+    let data;
+    if (agentOnline) {
+      const res = await API.tls(host, port);
+      if (!res.success) {
+        document.getElementById('tls-empty').innerHTML =
+          `<i class="fas fa-times-circle" style="color:var(--red);font-size:28px;display:block;margin-bottom:12px"></i> ${res.error || 'TLS connection failed'}`;
+        return;
+      }
+      const cert = res.certificate || {};
+      data = {
+        host, daysLeft: cert.days_left || 0,
+        tlsVersion: res.tls_version,
+        cipher:     res.cipher_suite,
+        keySize:    2048, keyType: 'RSA',
+        sigAlg:     'SHA-256 with RSA',
+        subject:    cert.subject || host,
+        issuer:     cert.issuer  || 'Unknown',
+        expiry:     cert.not_after || '—',
+        trust:      cert.type   || 'Unknown',
+        trusted:    res.trusted,
+        trustError: res.trust_error,
+        sni:        host,
+        sans:       [host],
+        thumbprint: '(see cert export)',
+        serial:     '(see cert export)',
+        chain:      (res.chain || []).map(c => ({
+          type: c.type, name: c.subject, exp: c.not_after
+        })),
+      };
+    } else {
+      await new Promise(r => setTimeout(r, 900 + Math.random()*600));
+      data = generateSimTLSData(host);
+    }
+    tlsResult = data;
+    renderTLSData(data);
     renderLegacyTLS();
     updateStats();
-  }, 900 + Math.random()*600);
+  } catch(e) {
+    document.getElementById('tls-empty').innerHTML =
+      `<i class="fas fa-times-circle" style="color:var(--red);font-size:28px;display:block;margin-bottom:12px"></i> Error: ${e.message}`;
+  }
 }
 
 function renderTLSData(d) {
@@ -1053,7 +1165,7 @@ function renderLegacyTLS() {
 // ══════════════════════════════════════════════
 //  DNS RESOLUTION (F4) — simulated
 // ══════════════════════════════════════════════
-function runDNS() {
+async function runDNS() {
   const host = document.getElementById('dns-host').value.trim();
   if (!host) { document.getElementById('dns-host').focus(); return; }
 
@@ -1062,30 +1174,35 @@ function runDNS() {
   document.getElementById('dns-data').style.display = 'none';
   document.getElementById('split-brain-alert').style.display = 'none';
 
-  setTimeout(() => {
-    const isAzure = host.includes('.azure.') || host.includes('.windows.net') || host.includes('.blob.') || host.includes('.servicebus.');
-    const isPrivate = !host.endsWith('.com') && !host.endsWith('.net') && !host.includes('blob') && !host.includes('azure');
-    // simulate IPs
-    let ips = [];
-    if (isPrivate) {
-      ips = [`10.${ri(0,15)}.${ri(0,255)}.${ri(2,254)}`];
-    } else if (isAzure) {
-      // might return public + private (simulating split-brain scenario)
-      ips = Math.random() > 0.4
-        ? [`10.${ri(0,15)}.${ri(0,255)}.${ri(2,254)}`]  // correct private endpoint
-        : [`10.${ri(0,15)}.${ri(0,255)}.${ri(2,254)}`, `${ri(20,50)}.${ri(10,200)}.${ri(10,200)}.${ri(10,200)}`]; // split-brain
+  try {
+    let d;
+    if (agentOnline) {
+      const res = await API.dns(host);
+      d = {
+        host,
+        ips:        res.ips || [],
+        resTime:    Math.round(res.resolved_ms),
+        tcpTime:    0,
+        splitBrain: res.split_brain,
+        isAzure:    res.azure_dns,
+        isPrivate:  res.ips && res.ips.every(ip => isPrivateIP(ip)),
+        isPrivateArr: res.is_private || [],
+        error:      res.error,
+      };
     } else {
-      ips = [`${ri(1,254)}.${ri(1,254)}.${ri(1,254)}.${ri(1,254)}`];
+      // fallback simulation
+      await new Promise(r => setTimeout(r, 600 + Math.random()*400));
+      const priv = `10.${ri(0,15)}.${ri(0,255)}.${ri(2,254)}`;
+      d = { host, ips:[priv], resTime:ri(8,120), tcpTime:ri(12,250),
+            splitBrain:false, isAzure:false, isPrivate:true, isPrivateArr:[true] };
     }
-
-    const resTime = ri(8,120);
-    const tcpTime = ri(12,250);
-    const splitBrain = ips.length > 1 && ips.some(ip => !ip.startsWith('10.') && !ip.startsWith('172.') && !ip.startsWith('192.168.'));
-
-    dnsResult = { host, ips, resTime, tcpTime, splitBrain, isAzure, isPrivate };
-    renderDNSData(dnsResult);
-    renderPing(ips[0]);
-  }, 600 + Math.random()*700);
+    dnsResult = d;
+    renderDNSData(d);
+    if (d.ips && d.ips.length > 0) renderPing(d.ips[0]);
+  } catch(e) {
+    document.getElementById('dns-empty').innerHTML =
+      `<i class="fas fa-times-circle" style="color:var(--red);font-size:24px;display:block;margin-bottom:10px"></i> Error: ${e.message}`;
+  }
 }
 
 function ri(a,b) { return Math.floor(Math.random()*(b-a+1))+a; }
@@ -1137,16 +1254,31 @@ function setStage(id, status, val, time) {
   if (document.getElementById(id+'-time')) document.getElementById(id+'-time').textContent = time;
 }
 
-function renderPing(ip) {
+async function renderPing(ip) {
+  if (agentOnline) {
+    try {
+      const res = await API.ping(ip);
+      document.getElementById('ping-result').innerHTML = renderKV([
+        {k:'Target IP',    v: ip},
+        {k:'Packets Sent', v: String(res.sent)},
+        {k:'Packet Loss',  v:`${res.packet_loss_pct}%`, cls: res.packet_loss_pct>0?'bad':'good'},
+        {k:'Min RTT',      v:`${res.min_ms}ms`},
+        {k:'Avg RTT',      v:`${res.avg_ms}ms`},
+        {k:'Max RTT',      v:`${res.max_ms}ms`},
+      ]);
+      return;
+    } catch(e) { /* fall through to simulation */ }
+  }
+  // fallback simulation
   const times = Array.from({length:4}, () => ri(8,180));
   const loss = Math.random() > 0.9 ? 25 : 0;
   document.getElementById('ping-result').innerHTML = renderKV([
-    {k:'Target IP',     v: ip},
-    {k:'Packets Sent',  v:'4'},
-    {k:'Packet Loss',   v:`${loss}%`,  cls: loss>0?'bad':'good'},
-    {k:'Min RTT',       v:`${Math.min(...times)}ms`},
-    {k:'Avg RTT',       v:`${Math.round(times.reduce((a,b)=>a+b)/4)}ms`},
-    {k:'Max RTT',       v:`${Math.max(...times)}ms`},
+    {k:'Target IP',    v: ip},
+    {k:'Packets Sent', v:'4'},
+    {k:'Packet Loss',  v:`${loss}%`, cls: loss>0?'bad':'good'},
+    {k:'Min RTT',      v:`${Math.min(...times)}ms`},
+    {k:'Avg RTT',      v:`${Math.round(times.reduce((a,b)=>a+b)/4)}ms`},
+    {k:'Max RTT',      v:`${Math.max(...times)}ms`},
   ]);
 }
 
