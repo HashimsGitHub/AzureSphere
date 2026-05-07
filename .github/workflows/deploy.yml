@@ -64,6 +64,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             mkdir -p nginx/html nginx/certs nginx/conf personas sftp-data
+            cp ~/AzureSphere/simulator/nginx/html/index.html nginx/html/index.html
             if [ ! -f nginx/certs/server.crt ]; then
               HOSTNAME=$(hostname -f 2>/dev/null || hostname)
               openssl req -x509 -nodes -days 825 -newkey rsa:2048 \
