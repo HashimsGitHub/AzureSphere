@@ -1,15 +1,8 @@
-# SSH Keys
 *.pem
 *.key
 *.ppk
-
-# Environment files
 .env
 .env.*
-
-# OS files
 .DS_Store
 Thumbs.db
-
-# Editor
 .vscode/

@@ -2,48 +2,40 @@
 set -e
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  AzureSphere — VM A Setup & Deploy"
+echo "  AzureSphere VM A - Setup and Deploy"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 echo ""
-echo "[1/7] Updating system packages..."
+echo "[1/6] Installing dependencies..."
 sudo apt update -y
-
-echo ""
-echo "[2/7] Installing dependencies..."
 sudo apt install -y docker.io docker-compose openssl git curl
 
 echo ""
-echo "[3/7] Starting Docker..."
+echo "[2/6] Starting Docker..."
 sudo systemctl enable docker
 sudo systemctl start docker
 
 echo ""
-echo "[4/7] Creating directory structure..."
-mkdir -p nginx/conf
-mkdir -p nginx/certs
-mkdir -p nginx/html
-mkdir -p sftp/data
-mkdir -p agent
+echo "[3/6] Creating directory structure..."
+mkdir -p nginx/conf nginx/certs nginx/html sftp/data agent
 
 echo ""
-echo "[5/7] Generating self-signed SSL certificate..."
+echo "[4/6] Generating SSL certificate..."
 HOSTNAME=$(hostname -f 2>/dev/null || hostname)
 openssl req -x509 -nodes -days 825 \
   -newkey rsa:2048 \
   -keyout nginx/certs/server.key \
-  -out  nginx/certs/server.crt \
+  -out nginx/certs/server.crt \
   -subj "/CN=azuresphere-vm/O=AzureSphere/OU=DiagnosticAgent" \
   -addext "subjectAltName=DNS:localhost,DNS:${HOSTNAME},IP:127.0.0.1"
-echo "   ✓ Certificate valid for 825 days"
+echo "   Certificate generated for ${HOSTNAME}"
 
 echo ""
-echo "[6/7] Writing nginx config..."
+echo "[5/6] Writing nginx config..."
 cat > nginx/conf/default.conf << 'NGINXEOF'
 server {
     listen 443 ssl;
     server_name _;
-
     ssl_certificate     /etc/nginx/certs/server.crt;
     ssl_certificate_key /etc/nginx/certs/server.key;
     ssl_protocols       TLSv1.2 TLSv1.3;
@@ -80,23 +72,24 @@ server {
     return 301 https://$host$request_uri;
 }
 NGINXEOF
-echo "   ✓ nginx config written"
+echo "   nginx config written"
 
 echo ""
-echo "[7/7] Copying index.html and starting all containers..."
+echo "[6/6] Building and starting containers..."
 cp index.html nginx/html/index.html
 sudo docker-compose build agent
 sudo docker-compose up -d
+sudo docker-compose ps
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✓ VM A deployed successfully"
+echo "  VM A deployed successfully"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "  Dashboard : https://$(hostname -I | awk '{print $1}')"
-echo "  Agent API : http://$(hostname -I | awk '{print $1}'):8080/api/info"
-echo "  SFTP      : sftp -P 22 testuser@$(hostname -I | awk '{print $1}')"
-echo "  SSH Admin : ssh -p 22222 azureuser@$(hostname -I | awk '{print $1}')"
+IP=$(hostname -I | awk '{print $1}')
+echo "  Dashboard : https://${IP}"
+echo "  Agent API : http://${IP}:8080/api/info"
+echo "  SFTP      : sftp -P 22 testuser@${IP}"
+echo "  SSH Admin : ssh -p 22222 azureuser@${IP}"
 echo ""
-sudo docker-compose ps
 EOF
