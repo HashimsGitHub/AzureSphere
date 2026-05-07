@@ -2,6 +2,9 @@ package main
 
 import (
 	"crypto/tls"
+	"crypto/sha1"
+	"encoding/base64"
+	"encoding/hex"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
@@ -43,8 +46,12 @@ type CertInfo struct {
 	Subject   string `json:"subject"`
 	Issuer    string `json:"issuer"`
 	NotAfter  string `json:"not_after"`
+	NotBefore string `json:"not_before"`
 	DaysLeft  int    `json:"days_left"`
 	Type      string `json:"type"`
+	Thumbprint string `json:"thumbprint"`
+	Serial    string `json:"serial"`
+	RawPEM    string `json:"raw_pem"`
 }
 
 type TLSResult struct {
@@ -297,6 +304,26 @@ func handleDNS(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+
+// certToPEM converts raw DER bytes to PEM format string
+func certToPEM(der []byte) string {
+	b64 := base64.StdEncoding.EncodeToString(der)
+	var lines []string
+	for i := 0; i < len(b64); i += 64 {
+		end := i + 64
+		if end > len(b64) {
+			end = len(b64)
+		}
+		lines = append(lines, b64[i:end])
+	}
+	pem := "-----BEGIN CERTIFICATE-----\n"
+	for _, l := range lines {
+		pem += l + "\n"
+	}
+	pem += "-----END CERTIFICATE-----\n"
+	return pem
+}
+
 // POST /api/test/tls   ?host=x&port=y
 func handleTLS(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
@@ -364,21 +391,31 @@ func handleTLS(w http.ResponseWriter, r *http.Request) {
 
 		result.SANs = sans
 		result.ChainErrors = chainErrors
+		thumb := sha1.Sum(leaf.Raw)
 		result.Certificate = &CertInfo{
-			Subject:  leaf.Subject.String(),
-			Issuer:   leaf.Issuer.String(),
-			NotAfter: leaf.NotAfter.Format("2006-01-02"),
-			DaysLeft: daysLeft,
-			Type:     certType(leaf),
+			Subject:    leaf.Subject.String(),
+			Issuer:     leaf.Issuer.String(),
+			NotAfter:   leaf.NotAfter.Format("2006-01-02"),
+			NotBefore:  leaf.NotBefore.Format("2006-01-02"),
+			DaysLeft:   daysLeft,
+			Type:       certType(leaf),
+			Thumbprint: hex.EncodeToString(thumb[:]),
+			Serial:     leaf.SerialNumber.Text(16),
+			RawPEM:     certToPEM(leaf.Raw),
 		}
 		for _, cert := range state.PeerCertificates {
 			dl := int(time.Until(cert.NotAfter).Hours() / 24)
+			t := sha1.Sum(cert.Raw)
 			result.Chain = append(result.Chain, CertInfo{
-				Subject:  cert.Subject.CommonName,
-				Issuer:   cert.Issuer.CommonName,
-				NotAfter: cert.NotAfter.Format("2006-01-02"),
-				DaysLeft: dl,
-				Type:     certType(cert),
+				Subject:    cert.Subject.CommonName,
+				Issuer:     cert.Issuer.CommonName,
+				NotAfter:   cert.NotAfter.Format("2006-01-02"),
+				NotBefore:  cert.NotBefore.Format("2006-01-02"),
+				DaysLeft:   dl,
+				Type:       certType(cert),
+				Thumbprint: hex.EncodeToString(t[:]),
+				Serial:     cert.SerialNumber.Text(16),
+				RawPEM:     certToPEM(cert.Raw),
 			})
 		}
 	}
