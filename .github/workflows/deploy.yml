@@ -30,45 +30,13 @@ jobs:
             cp index.html nginx/html/index.html
             if [ ! -f nginx/certs/server.crt ]; then
               HOSTNAME=$(hostname -f 2>/dev/null || hostname)
-              openssl req -x509 -nodes -days 825 \
-                -newkey rsa:2048 \
+              openssl req -x509 -nodes -days 825 -newkey rsa:2048 \
                 -keyout nginx/certs/server.key \
                 -out nginx/certs/server.crt \
                 -subj "/CN=azuresphere-vm/O=AzureSphere" \
                 -addext "subjectAltName=DNS:localhost,DNS:${HOSTNAME},IP:127.0.0.1"
-              echo "SSL cert generated"
             fi
-            if [ ! -f nginx/conf/default.conf ]; then
-              cat > nginx/conf/default.conf << 'NGINXEOF'
-server {
-    listen 443 ssl;
-    server_name _;
-    ssl_certificate     /etc/nginx/certs/server.crt;
-    ssl_certificate_key /etc/nginx/certs/server.key;
-    ssl_protocols       TLSv1.2 TLSv1.3;
-    ssl_ciphers         HIGH:!aNULL:!MD5;
-    location / {
-        root  /usr/share/nginx/html;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-    }
-    location /api/ {
-        proxy_pass         http://host.docker.internal:8080/api/;
-        proxy_http_version 1.1;
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-        proxy_read_timeout 30s;
-        add_header Access-Control-Allow-Origin * always;
-        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Content-Type" always;
-        if ($request_method = OPTIONS) { return 204; }
-    }
-    location /health { proxy_pass http://host.docker.internal:8080/health; }
-}
-server { listen 80; server_name _; return 301 https://$host$request_uri; }
-NGINXEOF
-              echo "nginx config written"
-            fi
+            cp nginx/conf/default.conf nginx/conf/default.conf 2>/dev/null || true
             sudo docker-compose build agent
             sudo docker-compose up -d
             sudo docker exec https-server nginx -s reload
@@ -96,16 +64,13 @@ NGINXEOF
             git fetch origin main
             git reset --hard origin/main
             mkdir -p nginx/html nginx/certs nginx/conf personas sftp-data
-            cp nginx/html/index.html nginx/html/index.html 2>/dev/null || true
             if [ ! -f nginx/certs/server.crt ]; then
               HOSTNAME=$(hostname -f 2>/dev/null || hostname)
-              openssl req -x509 -nodes -days 825 \
-                -newkey rsa:2048 \
+              openssl req -x509 -nodes -days 825 -newkey rsa:2048 \
                 -keyout nginx/certs/server.key \
                 -out nginx/certs/server.crt \
                 -subj "/CN=azuresphere-vmb/O=AzureSphere" \
                 -addext "subjectAltName=DNS:localhost,DNS:${HOSTNAME},IP:127.0.0.1"
-              echo "SSL cert generated"
             fi
             sudo docker-compose build persona-api
             sudo docker-compose up -d
