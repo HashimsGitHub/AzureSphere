@@ -1,46 +1,114 @@
-name: Deploy to Azure VM
+name: Deploy to VM A and VM B
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  deploy:
-    name: SSH to Pull to Build to Reload
-    runs-on: ubuntu-latest
 
+  deploy-vm-a:
+    name: Deploy to VM A
+    runs-on: ubuntu-latest
     steps:
-      - name: Deploy to VM via SSH
+      - name: SSH into VM A
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host:     ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
+          host:     ${{ secrets.VM_A_HOST }}
+          username: ${{ secrets.VM_A_USER }}
           key:      ${{ secrets.VM_SSH_KEY }}
           port:     22222
           timeout:  180s
           script: |
             set -e
-
             if [ ! -d ~/AzureSphere ]; then
-              echo "Repo not found - cloning fresh"
               git clone https://REMOVED_PAT@github.com/HashimsGitHub/AzureSphere.git ~/AzureSphere
             fi
-
             cd ~/AzureSphere
-            echo "Step 1 - Pulling latest code"
             git fetch origin main
             git reset --hard origin/main
-
-            echo "Step 2 - Syncing index.html"
-            mkdir -p nginx/html
+            mkdir -p nginx/html nginx/certs nginx/conf sftp/data
             cp index.html nginx/html/index.html
-
-            echo "Step 3 - Building and starting containers"
+            if [ ! -f nginx/certs/server.crt ]; then
+              HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+              openssl req -x509 -nodes -days 825 \
+                -newkey rsa:2048 \
+                -keyout nginx/certs/server.key \
+                -out nginx/certs/server.crt \
+                -subj "/CN=azuresphere-vm/O=AzureSphere" \
+                -addext "subjectAltName=DNS:localhost,DNS:${HOSTNAME},IP:127.0.0.1"
+              echo "SSL cert generated"
+            fi
+            if [ ! -f nginx/conf/default.conf ]; then
+              cat > nginx/conf/default.conf << 'NGINXEOF'
+server {
+    listen 443 ssl;
+    server_name _;
+    ssl_certificate     /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    location / {
+        root  /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+    location /api/ {
+        proxy_pass         http://host.docker.internal:8080/api/;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_read_timeout 30s;
+        add_header Access-Control-Allow-Origin * always;
+        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Content-Type" always;
+        if ($request_method = OPTIONS) { return 204; }
+    }
+    location /health { proxy_pass http://host.docker.internal:8080/health; }
+}
+server { listen 80; server_name _; return 301 https://$host$request_uri; }
+NGINXEOF
+              echo "nginx config written"
+            fi
             sudo docker-compose build agent
             sudo docker-compose up -d
-
-            echo "Step 4 - Reloading nginx"
             sudo docker exec https-server nginx -s reload
+            echo "VM A deploy complete"
+            sudo docker-compose ps
 
-            echo "Done - all services live"
+  deploy-vm-b:
+    name: Deploy to VM B
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into VM B
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.VM_B_HOST }}
+          username: ${{ secrets.VM_B_USER }}
+          key:      ${{ secrets.VM_B_SSH_KEY }}
+          port:     22
+          timeout:  180s
+          script: |
+            set -e
+            if [ ! -d ~/AzureSphere ]; then
+              git clone https://REMOVED_PAT@github.com/HashimsGitHub/AzureSphere.git ~/AzureSphere
+            fi
+            cd ~/AzureSphere/simulator
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p nginx/html nginx/certs nginx/conf personas sftp-data
+            cp nginx/html/index.html nginx/html/index.html 2>/dev/null || true
+            if [ ! -f nginx/certs/server.crt ]; then
+              HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+              openssl req -x509 -nodes -days 825 \
+                -newkey rsa:2048 \
+                -keyout nginx/certs/server.key \
+                -out nginx/certs/server.crt \
+                -subj "/CN=azuresphere-vmb/O=AzureSphere" \
+                -addext "subjectAltName=DNS:localhost,DNS:${HOSTNAME},IP:127.0.0.1"
+              echo "SSL cert generated"
+            fi
+            sudo docker-compose build persona-api
+            sudo docker-compose up -d
+            sudo docker exec vmb-dashboard nginx -s reload
+            echo "VM B deploy complete"
             sudo docker-compose ps
