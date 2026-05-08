@@ -31,15 +31,19 @@ Source Host (VM A)                    Destination Host (VM B)
 
 ---
 
-## Screenshots 
+## Screenshots - Digital Twin · Enterprise Connectivity Diagnostic
 <img width="1172" height="845" alt="image" src="https://github.com/user-attachments/assets/a173a52e-1974-4bbf-a547-b9c7ba2d6312" />
 <img width="1750" height="887" alt="image" src="https://github.com/user-attachments/assets/692976b2-39a0-4c32-a150-ba86d61070f9" />
 <img width="1767" height="790" alt="image" src="https://github.com/user-attachments/assets/437857ed-3729-4dc1-9da6-af6ee14e12de" />
-
-
+<img width="1776" height="567" alt="image" src="https://github.com/user-attachments/assets/04db2997-0735-42f6-a9bf-b9485c5f0041" />
 
 ---
+## Screenshots - Enterprise Service Endpoint · Multi-Protocol Listener
+<img width="1702" height="881" alt="image" src="https://github.com/user-attachments/assets/ceb378fe-635e-47c0-adc3-03523444423b" />
+<img width="1732" height="747" alt="image" src="https://github.com/user-attachments/assets/c3923d0f-853d-422a-ad8b-df480b402843" />
+<img width="1746" height="742" alt="image" src="https://github.com/user-attachments/assets/09272cd1-61ff-4b1d-9758-75549e869014" />
 
+---
 ## Features
 
 ### Source Host Dashboard (VM A)
