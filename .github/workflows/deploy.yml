@@ -10,7 +10,7 @@ jobs:
     name: Deploy to VM A
     runs-on: ubuntu-latest
     steps:
-      - name: SSH into VM A
+      - name: SSH into VM A and deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.VM_A_HOST }}
@@ -20,14 +20,64 @@ jobs:
           timeout:  180s
           script: |
             set -e
+
+            # ── 1. Pull latest code ───────────────────────────────────────
             if [ ! -d ~/AzureSphere ]; then
               git clone https://${{ secrets.GH_PAT }}@github.com/HashimsGitHub/AzureSphere.git ~/AzureSphere
             fi
             cd ~/AzureSphere
             git fetch origin main
             git reset --hard origin/main
-            mkdir -p nginx/html nginx/certs nginx/conf sftp/data
+
+            # ── 2. Ensure directory structure exists ──────────────────────
+            mkdir -p nginx/conf nginx/certs nginx/html sftp/data
+
+            # ── 3. Always write the nginx config (was a self-copy no-op before) ──
+            cat > nginx/conf/default.conf << 'NGINXEOF'
+            server {
+                listen 443 ssl;
+                server_name _;
+                ssl_certificate     /etc/nginx/certs/server.crt;
+                ssl_certificate_key /etc/nginx/certs/server.key;
+                ssl_protocols       TLSv1.2 TLSv1.3;
+                ssl_ciphers         HIGH:!aNULL:!MD5;
+
+                location / {
+                    root  /usr/share/nginx/html;
+                    index index.html;
+                    try_files $uri $uri/ /index.html;
+                }
+
+                location /api/ {
+                    proxy_pass         http://host.docker.internal:8080/api/;
+                    proxy_http_version 1.1;
+                    proxy_set_header   Host              $host;
+                    proxy_set_header   X-Real-IP         $remote_addr;
+                    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+                    proxy_set_header   X-Forwarded-Proto $scheme;
+                    proxy_read_timeout 30s;
+                    add_header Access-Control-Allow-Origin  * always;
+                    add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+                    add_header Access-Control-Allow-Headers "Content-Type" always;
+                    if ($request_method = OPTIONS) { return 204; }
+                }
+
+                location /health {
+                    proxy_pass http://host.docker.internal:8080/health;
+                }
+            }
+
+            server {
+                listen 80;
+                server_name _;
+                return 301 https://$host$request_uri;
+            }
+            NGINXEOF
+
+            # ── 4. Copy dashboard HTML into nginx serving dir ─────────────
             cp index.html nginx/html/index.html
+
+            # ── 5. Generate self-signed cert only if not already present ──
             if [ ! -f nginx/certs/server.crt ]; then
               HOSTNAME=$(hostname -f 2>/dev/null || hostname)
               openssl req -x509 -nodes -days 825 -newkey rsa:2048 \
@@ -35,12 +85,28 @@ jobs:
                 -out nginx/certs/server.crt \
                 -subj "/CN=azuresphere-vm/O=AzureSphere" \
                 -addext "subjectAltName=DNS:localhost,DNS:${HOSTNAME},IP:127.0.0.1"
+              echo "   Certificate generated for ${HOSTNAME}"
+            else
+              echo "   Certificate already exists, skipping"
             fi
-            cp nginx/conf/default.conf nginx/conf/default.conf 2>/dev/null || true
+
+            # ── 6. Build agent and bring stack up ─────────────────────────
             sudo docker-compose build agent
             sudo docker-compose down
             sudo docker-compose up -d
-            sudo docker exec https-server nginx -s reload
+
+            # ── 7. Wait for nginx to be ready before reloading ────────────
+            echo "Waiting for nginx container to be ready..."
+            for i in $(seq 1 15); do
+              if sudo docker exec https-server nginx -t 2>/dev/null; then
+                sudo docker exec https-server nginx -s reload
+                echo "nginx reloaded OK"
+                break
+              fi
+              echo "  attempt $i/15 — waiting..."
+              sleep 2
+            done
+
             echo "VM A deploy complete"
             sudo docker-compose ps
 
@@ -48,7 +114,7 @@ jobs:
     name: Deploy to VM B
     runs-on: ubuntu-latest
     steps:
-      - name: SSH into VM B
+      - name: SSH into VM B and deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.VM_B_HOST }}
@@ -58,14 +124,20 @@ jobs:
           timeout:  180s
           script: |
             set -e
+
+            # ── 1. Pull latest code from repo root (not simulator subdir) ─
             if [ ! -d ~/AzureSphere ]; then
               git clone https://${{ secrets.GH_PAT }}@github.com/HashimsGitHub/AzureSphere.git ~/AzureSphere
             fi
-            cd ~/AzureSphere/simulator
+            cd ~/AzureSphere
             git fetch origin main
             git reset --hard origin/main
+
+            # ── 2. Ensure directory structure exists ──────────────────────
+            cd ~/AzureSphere/simulator
             mkdir -p nginx/html nginx/certs nginx/conf personas sftp-data
-            echo VM B html already in place
+
+            # ── 3. Generate self-signed cert only if not already present ──
             if [ ! -f nginx/certs/server.crt ]; then
               HOSTNAME=$(hostname -f 2>/dev/null || hostname)
               openssl req -x509 -nodes -days 825 -newkey rsa:2048 \
@@ -73,10 +145,27 @@ jobs:
                 -out nginx/certs/server.crt \
                 -subj "/CN=azuresphere-vmb/O=AzureSphere" \
                 -addext "subjectAltName=DNS:localhost,DNS:${HOSTNAME},IP:127.0.0.1"
+              echo "   Certificate generated for ${HOSTNAME}"
+            else
+              echo "   Certificate already exists, skipping"
             fi
+
+            # ── 4. Build persona-api and bring stack up ───────────────────
             sudo docker-compose build persona-api
             sudo docker-compose down
             sudo docker-compose up -d
-            sudo docker exec vmb-dashboard nginx -s reload
+
+            # ── 5. Wait for nginx to be ready before reloading ────────────
+            echo "Waiting for nginx container to be ready..."
+            for i in $(seq 1 15); do
+              if sudo docker exec vmb-dashboard nginx -t 2>/dev/null; then
+                sudo docker exec vmb-dashboard nginx -s reload
+                echo "nginx reloaded OK"
+                break
+              fi
+              echo "  attempt $i/15 — waiting..."
+              sleep 2
+            done
+
             echo "VM B deploy complete"
             sudo docker-compose ps
