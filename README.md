@@ -136,8 +136,9 @@ AzureSphere/
 ```bash
 git clone https://github.com/HashimsGitHub/AzureSphere.git
 cd AzureSphere
-chmod +x setup.sh
-./setup.sh
+chmod +x start.sh
+# Select VM A option
+./start.sh
 ```
 
 **Open:** `https://[VM-A-IP]`
@@ -146,9 +147,10 @@ chmod +x setup.sh
 
 ```bash
 git clone https://github.com/HashimsGitHub/AzureSphere.git
-cd AzureSphere/simulator
-chmod +x setup.sh
-./setup.sh
+cd AzureSphere
+chmod +x start.sh
+# Select VM B Option
+./start.sh
 ```
 
 **Open:** `https://[VM-B-IP]`
