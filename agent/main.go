@@ -342,12 +342,19 @@ func handleTLS(w http.ResponseWriter, r *http.Request) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	result := TLSResult{Host: host, Port: port, Timestamp: now()}
 
+	// ServerName must be a hostname, not a bare IP — Go TLS rejects IP SNI
+	sniHost := host
+	if net.ParseIP(host) != nil {
+		sniHost = "" // empty SNI for IP targets; cert inspection still works
+	}
+	isIPTarget := net.ParseIP(host) != nil
+
 	// Stage 1: TLS handshake with bypass (inspect cert regardless of trust)
 	start := time.Now()
 	conn, err := tls.DialWithDialer(
 		&net.Dialer{Timeout: 8 * time.Second},
 		"tcp", addr,
-		&tls.Config{InsecureSkipVerify: true, ServerName: host},
+		&tls.Config{InsecureSkipVerify: true, ServerName: sniHost},
 	)
 	result.LatencyMs = math.Round(float64(time.Since(start).Microseconds())/10) / 100
 
@@ -421,16 +428,22 @@ func handleTLS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Stage 2: Real-world trust validation (using system cert store)
-	_, trustErr := tls.DialWithDialer(
-		&net.Dialer{Timeout: 8 * time.Second},
-		"tcp", addr,
-		&tls.Config{ServerName: host},
-	)
-	if trustErr != nil {
+	// Skip for bare IP targets — system store will never trust an IP-only self-signed cert
+	if isIPTarget {
 		result.Trusted = false
-		result.TrustError = trustErr.Error()
+		result.TrustError = "IP target: certificate trust validation skipped (use FQDN for full trust check)"
 	} else {
-		result.Trusted = true
+		_, trustErr := tls.DialWithDialer(
+			&net.Dialer{Timeout: 4 * time.Second},
+			"tcp", addr,
+			&tls.Config{ServerName: sniHost},
+		)
+		if trustErr != nil {
+			result.Trusted = false
+			result.TrustError = trustErr.Error()
+		} else {
+			result.Trusted = true
+		}
 	}
 
 	writeJSON(w, http.StatusOK, result)
