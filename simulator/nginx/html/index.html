@@ -1,0 +1,20 @@
+# On your destination host (VM B)
+cd ~/AzureSphere/simulator
+
+# Backup the old file
+cp nginx/html/index.html nginx/html/index.html.bak
+
+# Create the directory if it doesn't exist
+mkdir -p nginx/html
+
+# Edit the file (copy the content above)
+sudo nano nginx/html/index.html
+
+# Or use this command to download if you have it hosted
+# sudo curl -o nginx/html/index.html https://your-raw-content-url
+
+# Restart nginx to apply changes
+sudo docker-compose restart vmb-dashboard
+
+# Clear browser cache and reload the page
+# Press Ctrl+F5 or Cmd+Shift+R on Mac
