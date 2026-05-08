@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bufio"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,383 +14,377 @@ import (
 	"time"
 )
 
+// ─── Persona definition ───────────────────────────────────────────────────────
+
 type Persona struct {
-	Name     string
-	Protocol string
-	Port     int
-	Banner   string
+	Name     string `json:"name"`
+	Protocol string `json:"protocol"`
+	Port     int    `json:"port"`
+	Banner   string `json:"banner"`
 }
 
-type ConnectionRecord struct {
-	Time      string `json:"time"`
-	RemoteIP  string `json:"remote_ip"`
-	Persona   string `json:"persona"`
-	Protocol  string `json:"protocol"`
-	Port      int    `json:"port"`
-	UserAgent string `json:"user_agent,omitempty"`
+type ConnectionEvent struct {
+	Time     string `json:"time"`
+	Persona  string `json:"persona"`
+	Port     int    `json:"port"`
+	RemoteIP string `json:"remote_ip"`
+	Protocol string `json:"protocol"`
 }
 
-type PersonaServer struct {
-	personas        []Persona
-	listeners       []net.Listener
-	connectionLog   []ConnectionRecord
-	logMutex        sync.RWMutex
-	startTime       time.Time
-	totalConnects   int
-	connMutex       sync.Mutex
-	localIPs        map[string]bool
+// ─── Global state ─────────────────────────────────────────────────────────────
+
+var (
+	personas      []Persona
+	connLog       []ConnectionEvent
+	connMu        sync.Mutex
+	startTime     = time.Now()
+	totalConnects int64
+)
+
+func logConn(persona string, port int, protocol, remote string) {
+	connMu.Lock()
+	defer connMu.Unlock()
+	totalConnects++
+	ev := ConnectionEvent{
+		Time:     time.Now().UTC().Format(time.RFC3339),
+		Persona:  persona,
+		Port:     port,
+		Protocol: protocol,
+		RemoteIP: remote,
+	}
+	connLog = append([]ConnectionEvent{ev}, connLog...)
+	if len(connLog) > 500 {
+		connLog = connLog[:500]
+	}
+	log.Printf("[%s] connection from %s → %s :%d", protocol, remote, persona, port)
 }
 
-func NewPersonaServer() *PersonaServer {
-	ps := &PersonaServer{
-		personas:      make([]Persona, 0),
-		listeners:     make([]net.Listener, 0),
-		connectionLog: make([]ConnectionRecord, 0),
-		startTime:     time.Now(),
-		localIPs:      make(map[string]bool),
-	}
-	ps.detectLocalIPs()
-	return ps
-}
+// ─── Protocol handlers ────────────────────────────────────────────────────────
 
-func (ps *PersonaServer) detectLocalIPs() {
-	// Add standard local IPs
-	ps.localIPs["127.0.0.1"] = true
-	ps.localIPs["::1"] = true
-	ps.localIPs["localhost"] = true
-	
-	// Get all network interfaces
-	addrs, err := net.InterfaceAddrs()
-	if err == nil {
-		for _, addr := range addrs {
-			if ipnet, ok := addr.(*net.IPNet); ok {
-				if ipnet.IP.IsLoopback() || ipnet.IP.IsPrivate() {
-					ps.localIPs[ipnet.IP.String()] = true
-				}
-			}
-		}
-	}
-	
-	// Add Docker bridge networks
-	for i := 17; i <= 20; i++ {
-		ps.localIPs[fmt.Sprintf("172.%d.0.1", i)] = true
-	}
-}
-
-func (ps *PersonaServer) isLocalIP(ip string) bool {
-	// Strip port if present
-	if idx := strings.Index(ip, ":"); idx != -1 {
-		ip = ip[:idx]
-	}
-	return ps.localIPs[ip]
-}
-
-func (ps *PersonaServer) addConnection(remoteIP string, persona Persona) {
-	ps.connMutex.Lock()
-	defer ps.connMutex.Unlock()
-	
-	// Skip recording local connections
-	if ps.isLocalIP(remoteIP) {
-		log.Printf("Skipping local connection from %s to %s (port %d)", remoteIP, persona.Name, persona.Port)
-		return
-	}
-	
-	ps.totalConnects++
-	
-	record := ConnectionRecord{
-		Time:     time.Now().Format(time.RFC3339),
-		RemoteIP: remoteIP,
-		Persona:  persona.Name,
-		Protocol: persona.Protocol,
-		Port:     persona.Port,
-	}
-	
-	ps.logMutex.Lock()
-	ps.connectionLog = append([]ConnectionRecord{record}, ps.connectionLog...)
-	// Keep last 1000 records
-	if len(ps.connectionLog) > 1000 {
-		ps.connectionLog = ps.connectionLog[:1000]
-	}
-	ps.logMutex.Unlock()
-	
-	log.Printf("✅ REAL CONNECTION: %s from %s to %s (port %d)", 
-		persona.Protocol, remoteIP, persona.Name, persona.Port)
-}
-
-func (ps *PersonaServer) handleConnection(conn net.Conn, persona Persona) {
+func handleSQL(conn net.Conn, persona Persona) {
 	defer conn.Close()
-	
-	remoteAddr := conn.RemoteAddr().String()
-	log.Printf("Incoming connection on port %d from %s", persona.Port, remoteAddr)
-	
-	// Record the connection (only if not local)
-	ps.addConnection(remoteAddr, persona)
-	
-	// Send banner if configured
-	if persona.Banner != "" {
-		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		conn.Write([]byte(persona.Banner + "\n"))
+	logConn(persona.Name, persona.Port, "SQL/TDS", conn.RemoteAddr().String())
+	// TDS Pre-Login response — enough for VM A agent to detect SQL Server
+	// TokenType=0x04 (PreLogin), Version=16.0.4120.1 (SQL Server 2022)
+	prelogin := []byte{
+		0x04, 0x01, 0x00, 0x2B, 0x00, 0x00, 0x01, 0x00,
+		0x00, 0x00, 0x1A, 0x00, 0x06, // VERSION offset+len
+		0x01, 0x00, 0x20, 0x00, 0x01, // ENCRYPTION offset+len
+		0x02, 0x00, 0x21, 0x00, 0x01, // INSTOPT
+		0x03, 0x00, 0x22, 0x00, 0x04, // THREADID
+		0x04, 0x00, 0x26, 0x00, 0x01, // MARS
+		0xFF,                          // terminator
+		0x10, 0x00, 0x07, 0x8B, 0x00, 0x00, // version: 16.0.1931
+		0x02,                          // encryption: not supported
+		0x00,                          // instance
+		0x00, 0x00, 0x00, 0x00,        // thread id
+		0x00,                          // MARS off
 	}
-	
-	// For protocol-specific handling
-	switch persona.Protocol {
-	case "SQL":
-		ps.handleSQL(conn, persona)
-	case "POSTGRES":
-		ps.handlePostgres(conn, persona)
-	case "FTP":
-		ps.handleFTP(conn, persona)
-	case "RABBITMQ":
-		ps.handleRabbitMQ(conn, persona)
-	case "HANA":
-		ps.handleHANA(conn, persona)
-	case "WEBMETHODS":
-		ps.handleWebMethods(conn, persona)
-	case "SMB":
-		ps.handleSMB(conn, persona)
-	default:
-		ps.handleGenericTCP(conn, persona)
-	}
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	conn.Read(make([]byte, 1024)) // read client pre-login
+	conn.Write(prelogin)
 }
 
-func (ps *PersonaServer) handleGenericTCP(conn net.Conn, persona Persona) {
-	// Read and echo for TCP test
-	reader := bufio.NewReader(conn)
-	for {
-		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-		message, err := reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-		conn.Write([]byte("ECHO: " + message))
-	}
+func handlePostgres(conn net.Conn, persona Persona) {
+	defer conn.Close()
+	logConn(persona.Name, persona.Port, "PostgreSQL", conn.RemoteAddr().String())
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	conn.Read(make([]byte, 1024)) // read startup message
+	// Authentication request — MD5 password (type R, len 12, auth type 5)
+	msg := []byte{'R', 0, 0, 0, 12, 0, 0, 0, 5, 0xDE, 0xAD, 0xBE, 0xEF}
+	conn.Write(msg)
 }
 
-func (ps *PersonaServer) handleSQL(conn net.Conn, persona Persona) {
-	// Simulate SQL Server pre-login response
-	response := []byte{
-		0x04, 0x01, 0x00, 0x25, 0x00, 0x00, 0x01, 0x00, // PRELOGIN response
-	}
-	conn.Write(response)
-	time.Sleep(100 * time.Millisecond)
-	conn.Write([]byte("Microsoft SQL Server 2022 - AzureSphere Edition\r\n"))
-}
-
-func (ps *PersonaServer) handlePostgres(conn net.Conn, persona Persona) {
-	// Send PostgreSQL startup message
-	conn.Write([]byte("NPostgreSQL 15.3 on x86_64-pc-linux-gnu\r\n"))
-}
-
-func (ps *PersonaServer) handleFTP(conn net.Conn, persona Persona) {
-	conn.Write([]byte("220 AzureSphere FTP Server ready\r\n"))
-	reader := bufio.NewReader(conn)
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-		if strings.HasPrefix(strings.ToUpper(line), "QUIT") {
-			conn.Write([]byte("221 Goodbye\r\n"))
-			break
-		}
-		conn.Write([]byte("502 Command not implemented\r\n"))
+func handleFTP(conn net.Conn, persona Persona) {
+	defer conn.Close()
+	logConn(persona.Name, persona.Port, "FTP", conn.RemoteAddr().String())
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	banner := fmt.Sprintf("220 %s FTP Server Ready (AzureSphere Simulator)\r\n", persona.Name)
+	conn.Write([]byte(banner))
+	// Respond to USER command
+	buf := make([]byte, 256)
+	n, _ := conn.Read(buf)
+	if n > 0 && strings.HasPrefix(string(buf[:n]), "USER") {
+		conn.Write([]byte("331 Password required\r\n"))
+		conn.Read(buf) // PASS
+		conn.Write([]byte("230 Login successful — AzureSphere Simulator\r\n"))
 	}
 }
 
-func (ps *PersonaServer) handleRabbitMQ(conn net.Conn, persona Persona) {
-	// AMQP 0-9-1 protocol header
-	conn.Write([]byte{0x41, 0x4d, 0x51, 0x50, 0x00, 0x09, 0x01, 0x00})
+func handleRabbitMQ(conn net.Conn, persona Persona) {
+	defer conn.Close()
+	logConn(persona.Name, persona.Port, "AMQP/RabbitMQ", conn.RemoteAddr().String())
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	buf := make([]byte, 8)
+	conn.Read(buf) // AMQP\x00\x00\x09\x01 protocol header
+
+	// AMQP 0-9-1 Connection.Start frame
+	// Frame type=1 (method), channel=0, class=10 (connection), method=10 (start)
+	capabilities := `{"publisher_confirms":true,"exchange_exchange_bindings":true,"basic.nack":true,"consumer_cancel_notify":true,"connection.blocked":true,"consumer_priorities":true,"authentication_failure_close":true,"per_consumer_qos":true,"direct_reply_to":true}`
+	serverProps := fmt.Sprintf(
+		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"+
+			"\x07product\x53\x00\x00\x00\x08RabbitMQ"+
+			"\x07version\x53\x00\x00\x00\x05%s"+
+			"\x08platform\x53\x00\x00\x00\x13Erlang/OTP 26.0"+
+			"\x0Ccapabilities\x46%s",
+		"3.12.6", capabilities)
+	_ = serverProps
+
+	// Simplified valid Connection.Start
+	payload := []byte{
+		0x00, 0x0A, 0x00, 0x0A, // class=10, method=10
+		0x00, 0x09,             // version major=0, minor=9
+		// server properties (empty table for simplicity)
+		0x00, 0x00, 0x00, 0x00,
+		// mechanisms
+		0x00, 0x00, 0x00, 0x05, 'P', 'L', 'A', 'I', 'N',
+		// locales
+		0x00, 0x00, 0x00, 0x05, 'e', 'n', '_', 'U', 'S',
+	}
+	frame := make([]byte, 7+len(payload)+1)
+	frame[0] = 1 // type: method
+	binary.BigEndian.PutUint16(frame[1:3], 0)
+	binary.BigEndian.PutUint32(frame[3:7], uint32(len(payload)))
+	copy(frame[7:], payload)
+	frame[7+len(payload)] = 0xCE // frame end
+	conn.Write(frame)
 }
 
-func (ps *PersonaServer) handleHANA(conn net.Conn, persona Persona) {
-	conn.Write([]byte("SAP HANA Database 2.00.070.00\r\n"))
+func handleSAPHANA(conn net.Conn, persona Persona) {
+	defer conn.Close()
+	logConn(persona.Name, persona.Port, "SAP HANA", conn.RemoteAddr().String())
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	conn.Read(make([]byte, 1024))
+	// HANA SQL port greeting — simplified
+	greeting := []byte{
+		0x00, 0x00, 0x00, 0x08, // length
+		0xFF, 0xFF, 0xFF, 0xFF, // version indicator
+	}
+	conn.Write(greeting)
 }
 
-func (ps *PersonaServer) handleWebMethods(conn net.Conn, persona Persona) {
-	conn.Write([]byte("HTTP/1.1 200 OK\r\nServer: webMethods IS 10.15\r\n\r\n"))
+func handleWebMethods(conn net.Conn, persona Persona) {
+	defer conn.Close()
+	logConn(persona.Name, persona.Port, "webMethods/HTTP", conn.RemoteAddr().String())
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	buf := make([]byte, 4096)
+	conn.Read(buf)
+	resp := "HTTP/1.1 200 OK\r\n" +
+		"Server: webMethods Integration Server 10.15\r\n" +
+		"Content-Type: text/html\r\n" +
+		"X-Powered-By: Software AG webMethods\r\n" +
+		"Connection: close\r\n\r\n" +
+		"<html><body><h1>webMethods Integration Server</h1>" +
+		"<p>AzureSphere Simulator — Persona active on port " +
+		strconv.Itoa(persona.Port) + "</p></body></html>"
+	conn.Write([]byte(resp))
 }
 
-func (ps *PersonaServer) handleSMB(conn net.Conn, persona Persona) {
-	// SMB protocol negotiation response
-	conn.Write([]byte{0x00, 0x00, 0x00, 0x2f, 0xfe, 0x53, 0x4d, 0x42})
+func handleSMB(conn net.Conn, persona Persona) {
+	defer conn.Close()
+	logConn(persona.Name, persona.Port, "SMB", conn.RemoteAddr().String())
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	conn.Read(make([]byte, 1024))
+	// SMB2 negotiate response header (minimal)
+	smb2Header := []byte{
+		0x00, 0x00, 0x00, 0x54, // NetBIOS length
+		0xFE, 0x53, 0x4D, 0x42, // SMB2 magic
+		0x40, 0x00,             // header size
+		0x00, 0x00,             // credit charge
+		0x00, 0x00, 0x00, 0x00, // status
+		0x00, 0x00,             // command: negotiate
+		0x01, 0x00,             // credits granted
+		0x01, 0x00, 0x00, 0x00, // flags: response
+		0x00, 0x00, 0x00, 0x00, // next command
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // message id
+		0x00, 0x00, 0x00, 0x00, // process id
+		0x00, 0x00, 0x00, 0x00, // tree id
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // session id
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // signature
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}
+	conn.Write(smb2Header)
 }
 
-func (ps *PersonaServer) startPersona(persona Persona) error {
-	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", persona.Port))
+func handleGenericTCP(conn net.Conn, persona Persona) {
+	defer conn.Close()
+	logConn(persona.Name, persona.Port, "TCP", conn.RemoteAddr().String())
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	banner := persona.Banner
+	if banner == "" {
+		banner = fmt.Sprintf("220 %s AzureSphere Simulator ready on port %d\r\n",
+			persona.Name, persona.Port)
+	}
+	conn.Write([]byte(banner))
+}
+
+// ─── Listener factory ─────────────────────────────────────────────────────────
+
+func startListener(persona Persona) {
+	addr := fmt.Sprintf(":%d", persona.Port)
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to listen on port %d: %v", persona.Port, err)
-	}
-	
-	ps.listeners = append(ps.listeners, listener)
-	
-	log.Printf("🚀 Started %s persona '%s' on port %d", persona.Protocol, persona.Name, persona.Port)
-	
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				log.Printf("Accept error on port %d: %v", persona.Port, err)
-				return
-			}
-			go ps.handleConnection(conn, persona)
-		}
-	}()
-	
-	return nil
-}
-
-func (ps *PersonaServer) loadPersonasFromEnv() {
-	for i := 1; i <= 100; i++ {
-		envKey := fmt.Sprintf("PERSONA_%d", i)
-		personaStr := os.Getenv(envKey)
-		if personaStr == "" {
-			continue
-		}
-		
-		// Format: "Name:PROTOCOL:PORT:Banner"
-		parts := strings.SplitN(personaStr, ":", 4)
-		if len(parts) < 3 {
-			log.Printf("Invalid persona format for %s: %s (expected Name:PROTOCOL:PORT:Banner)", envKey, personaStr)
-			continue
-		}
-		
-		name := parts[0]
-		protocol := strings.ToUpper(parts[1])
-		port, err := strconv.Atoi(parts[2])
-		if err != nil {
-			log.Printf("Invalid port for %s: %s", envKey, parts[2])
-			continue
-		}
-		
-		banner := ""
-		if len(parts) >= 4 {
-			banner = parts[3]
-		}
-		
-		persona := Persona{
-			Name:     name,
-			Protocol: protocol,
-			Port:     port,
-			Banner:   banner,
-		}
-		
-		ps.personas = append(ps.personas, persona)
-		
-		if err := ps.startPersona(persona); err != nil {
-			log.Printf("Failed to start persona %s: %v", name, err)
-		}
-	}
-}
-
-// API Handlers
-func (ps *PersonaServer) statusHandler(w http.ResponseWriter, r *http.Request) {
-	hostname, _ := os.Hostname()
-	uptime := time.Since(ps.startTime)
-	
-	response := map[string]interface{}{
-		"hostname":       hostname,
-		"persona_count":  len(ps.personas),
-		"total_connects": ps.totalConnects,
-		"uptime":         formatDuration(uptime),
-		"status":         "healthy",
-	}
-	
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-func (ps *PersonaServer) personasHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ps.personas)
-}
-
-func (ps *PersonaServer) connectionsHandler(w http.ResponseWriter, r *http.Request) {
-	ps.logMutex.RLock()
-	defer ps.logMutex.RUnlock()
-	
-	// Return only non-local connections
-	filtered := make([]ConnectionRecord, 0)
-	for _, conn := range ps.connectionLog {
-		if !ps.isLocalIP(conn.RemoteIP) {
-			filtered = append(filtered, conn)
-		}
-	}
-	
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filtered)
-}
-
-func (ps *PersonaServer) resetConnectionsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		log.Printf("[ERROR] cannot listen on %d for %s: %v", persona.Port, persona.Name, err)
 		return
 	}
-	
-	ps.logMutex.Lock()
-	cleared := len(ps.connectionLog)
-	ps.connectionLog = make([]ConnectionRecord, 0)
-	ps.logMutex.Unlock()
-	
-	ps.connMutex.Lock()
-	ps.totalConnects = 0
-	ps.connMutex.Unlock()
-	
-	log.Printf("Connection log cleared (%d entries)", cleared)
-	
-	response := map[string]interface{}{
-		"cleared": cleared,
-		"status":  "ok",
+	log.Printf("[START] %s persona on :%d (%s)", persona.Name, persona.Port, persona.Protocol)
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Printf("[ERROR] accept on %d: %v", persona.Port, err)
+			continue
+		}
+		go func(c net.Conn) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[RECOVER] %s: %v", persona.Name, r)
+				}
+			}()
+			switch strings.ToUpper(persona.Protocol) {
+			case "SQL", "MSSQL", "SQLSERVER":
+				handleSQL(c, persona)
+			case "POSTGRES", "POSTGRESQL":
+				handlePostgres(c, persona)
+			case "FTP":
+				handleFTP(c, persona)
+			case "RABBITMQ", "AMQP":
+				handleRabbitMQ(c, persona)
+			case "HANA", "SAPHANA":
+				handleSAPHANA(c, persona)
+			case "WEBMETHODS", "WEBM":
+				handleWebMethods(c, persona)
+			case "SMB":
+				handleSMB(c, persona)
+			default:
+				handleGenericTCP(c, persona)
+			}
+		}(conn)
 	}
-	
+}
+
+// ─── Status API ───────────────────────────────────────────────────────────────
+
+func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-func (ps *PersonaServer) healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
-}
-
-func formatDuration(d time.Duration) string {
-	hours := int(d.Hours())
-	minutes := int(d.Minutes()) % 60
-	seconds := int(d.Seconds()) % 60
-	
-	if hours > 0 {
-		return fmt.Sprintf("%dh%dm", hours, minutes)
-	}
-	if minutes > 0 {
-		return fmt.Sprintf("%dm%ds", minutes, seconds)
-	}
-	return fmt.Sprintf("%ds", seconds)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(v)
 }
 
 func main() {
-	log.Println("Starting AzureSphere Destination Host Persona API...")
-	
-	server := NewPersonaServer()
-	server.loadPersonasFromEnv()
-	
-	if len(server.personas) == 0 {
-		log.Println("⚠️  WARNING: No personas configured. Set PERSONA_n environment variables.")
+	// Load personas from environment — one per env var PERSONA_n=name:protocol:port:banner
+	// e.g. PERSONA_1=SQL Server:SQL:1433:
+	//      PERSONA_2=PostgreSQL:POSTGRES:5432:
+	//      PERSONA_3=FTP Server:FTP:21:220 Welcome
+	for i := 1; i <= 50; i++ {
+		val := os.Getenv(fmt.Sprintf("PERSONA_%d", i))
+		if val == "" {
+			continue
+		}
+		parts := strings.SplitN(val, ":", 4)
+		if len(parts) < 3 {
+			log.Printf("[WARN] invalid PERSONA_%d: %s", i, val)
+			continue
+		}
+		port, err := strconv.Atoi(strings.TrimSpace(parts[2]))
+		if err != nil {
+			log.Printf("[WARN] invalid port in PERSONA_%d: %s", i, parts[2])
+			continue
+		}
+		banner := ""
+		if len(parts) == 4 {
+			banner = parts[3]
+		}
+		p := Persona{
+			Name:     strings.TrimSpace(parts[0]),
+			Protocol: strings.TrimSpace(parts[1]),
+			Port:     port,
+			Banner:   banner,
+		}
+		personas = append(personas, p)
 	}
-	
-	// API routes
-	http.HandleFunc("/api/status", server.statusHandler)
-	http.HandleFunc("/api/personas", server.personasHandler)
-	http.HandleFunc("/api/connections", server.connectionsHandler)
-	http.HandleFunc("/api/connections/reset", server.resetConnectionsHandler)
-	http.HandleFunc("/health", server.healthHandler)
-	
-	port := os.Getenv("API_PORT")
-	if port == "" {
-		port = "9090"
+
+	if len(personas) == 0 {
+		log.Println("[WARN] No PERSONA_n env vars found — using defaults")
+		personas = []Persona{
+			{Name: "SQL Server",    Protocol: "SQL",        Port: 1433},
+			{Name: "PostgreSQL",    Protocol: "POSTGRES",   Port: 5432},
+			{Name: "FTP Server",    Protocol: "FTP",        Port: 21},
+			{Name: "RabbitMQ",      Protocol: "RABBITMQ",   Port: 5672},
+			{Name: "SAP HANA",      Protocol: "HANA",       Port: 30015},
+			{Name: "webMethods IS", Protocol: "WEBMETHODS", Port: 5555},
+			{Name: "SMB Share",     Protocol: "SMB",        Port: 445},
+		}
 	}
-	
-	log.Printf("Persona API listening on :%s", port)
-	log.Printf("Active personas: %d", len(server.personas))
-	
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatal("Failed to start API server:", err)
+
+	// Start all persona listeners
+	for _, p := range personas {
+		go startListener(p)
 	}
+
+	// Status API — used by VM B dashboard
+	apiPort := os.Getenv("API_PORT")
+	if apiPort == "" {
+		apiPort = "9090"
+	}
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/api/personas", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, personas)
+	})
+
+	mux.HandleFunc("/api/connections", func(w http.ResponseWriter, r *http.Request) {
+		connMu.Lock()
+		defer connMu.Unlock()
+		writeJSON(w, connLog)
+	})
+
+	// Reset endpoint — clears in-memory log only, preserves totalConnects counter
+	mux.HandleFunc("/api/connections/reset", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		connMu.Lock()
+		cleared := len(connLog)
+		connLog = []ConnectionEvent{}
+		connMu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"cleared":   cleared,
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		})
+		log.Printf("[RESET] connection log cleared (%d entries removed)", cleared)
+	})
+
+	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
+		connMu.Lock()
+		logLen := len(connLog)
+		total := totalConnects
+		connMu.Unlock()
+		hostname, _ := os.Hostname()
+		writeJSON(w, map[string]interface{}{
+			"hostname":       hostname,
+			"uptime":         time.Since(startTime).Round(time.Second).String(),
+			"persona_count":  len(personas),
+			"total_connects": total,
+			"log_entries":    logLen,
+			"timestamp":      time.Now().UTC().Format(time.RFC3339),
+		})
+	})
+
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
+	log.Printf("VM B Simulator — %d personas active", len(personas))
+	log.Printf("Status API on :%s", apiPort)
+	for _, p := range personas {
+		log.Printf("  %-20s %s → :%d", p.Name, p.Protocol, p.Port)
+	}
+	log.Fatal(http.ListenAndServe(":"+apiPort, mux))
 }

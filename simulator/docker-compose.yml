@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+
   # ── VM B Dashboard (nginx serving the GUI) ────────────────────────────
   dashboard:
     image: nginx:alpine
@@ -32,21 +33,21 @@ services:
       - "5672:5672"   # RabbitMQ
       - "30015:30015" # SAP HANA
       - "5555:5555"   # webMethods
-      # - "445:445"   # SMB - DISABLED for security (comment out)
+      # - "445:445"   # SMB - DISABLED for security
       - "8888:8888"   # Custom TCP App
     environment:
       API_PORT: "9090"
-      # Allowed IP ranges (CIDR notation) - Add your source VM IP
-      ALLOWED_IPS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-      # ── Persona configurations ────────────────────────────────────────
-      PERSONA_1: "SQL Server 2022:SQL:1433:Microsoft SQL Server 2022 Ready"
-      PERSONA_2: "PostgreSQL 16:POSTGRES:5432:PostgreSQL 16.3 ready"
-      PERSONA_3: "FTP Server:FTP:21:FTP Service Ready"
-      PERSONA_4: "RabbitMQ 3.12:RABBITMQ:5672:AMQP 0-9-1 ready"
-      PERSONA_5: "SAP HANA:HANA:30015:SAP HANA 2.0 Ready"
-      PERSONA_6: "webMethods IS:WEBMETHODS:5555:webMethods 10.15 Ready"
+      # ── Add as many PERSONA_n as you want ──────────────────────────────
+      # Format: "Name:PROTOCOL:PORT:Optional Banner"
+      # Protocols: SQL, POSTGRES, FTP, RABBITMQ, HANA, WEBMETHODS, SMB, TCP
+      PERSONA_1: "SQL Server 2022:SQL:1433:"
+      PERSONA_2: "PostgreSQL 16:POSTGRES:5432:"
+      PERSONA_3: "FTP Server:FTP:21:"
+      PERSONA_4: "RabbitMQ 3.12:RABBITMQ:5672:"
+      PERSONA_5: "SAP HANA:HANA:30015:"
+      PERSONA_6: "webMethods IS:WEBMETHODS:5555:"
       # PERSONA_7: "SMB File Share:SMB:445:"  # DISABLED - Security risk
-      PERSONA_8: "Custom TCP App:TCP:8888:Custom Application Ready"
+      PERSONA_8: "Custom TCP App:TCP:8888:220 Custom App Ready"
     networks:
       - azuresphere-net
     restart: unless-stopped
@@ -56,7 +57,7 @@ services:
     image: nginx:alpine
     container_name: vmb-persona-https
     ports:
-      - "8443:8443"
+      - "8443:443"    # FIX: container listens on 443 (https-persona.conf: listen 443 ssl)
     volumes:
       - ./nginx/certs:/etc/nginx/certs
       - ./personas/https-persona.conf:/etc/nginx/conf.d/default.conf:ro
@@ -64,7 +65,7 @@ services:
       - azuresphere-net
     restart: unless-stopped
 
-  # ── SFTP persona — port 2222 (22 reserved for VM SSH) ─────────────────
+  # ── SFTP persona — port 2222 (22 is reserved for SSH on VM B) ─────────
   persona-sftp:
     image: atmoz/sftp:alpine
     container_name: vmb-persona-sftp
