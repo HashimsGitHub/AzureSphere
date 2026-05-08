@@ -764,7 +764,8 @@ async function syncFromVMB(host) {
   if (!host) return;
   vmBHost = host;
   try {
-    const res = await fetchWithTimeout(`https://${host}/api/personas`, 5000);
+    // Route through VM A agent to avoid CORS — agent fetches http://VMB:9090/api/personas
+    const res = await fetchWithTimeout(`/api/vmb/personas?host=${encodeURIComponent(host)}`, 5000);
     if (!res || !Array.isArray(res)) return;
     renderSyncedProtos(res);
     updateSyncBadge(true, res.length);

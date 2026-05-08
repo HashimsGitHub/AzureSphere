@@ -540,6 +540,44 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+
+// GET /api/vmb/personas?host=x  — proxies VM B persona-api through agent (avoids CORS/port issues)
+func handleVMBPersonas(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	host := r.URL.Query().Get("host")
+	if host == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "host is required"})
+		return
+	}
+
+	// Strip port if user passed one — always hit persona-api on 9090
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+
+	url := fmt.Sprintf("http://%s:9090/api/personas", host)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Stream the response body directly — it's already JSON
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(func() interface{} {
+		var v interface{}
+		json.NewDecoder(resp.Body).Decode(&v)
+		return v
+	}())
+}
+
 func main() {
 	port := os.Getenv("AGENT_PORT")
 	if port == "" {
@@ -552,6 +590,7 @@ func main() {
 	mux.HandleFunc("/api/test/dns",   handleDNS)
 	mux.HandleFunc("/api/test/tls",   handleTLS)
 	mux.HandleFunc("/api/test/ping",  handlePing)
+	mux.HandleFunc("/api/vmb/personas", handleVMBPersonas)
 
 	// Health check
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
