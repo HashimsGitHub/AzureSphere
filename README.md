@@ -160,32 +160,6 @@ chmod +x setup.sh
 
 Every `git push` to `main` automatically deploys to both VMs. After provisioning new VMs, update the two host secrets and push any commit — Actions handles the rest.
 
-### Required GitHub Secrets
-
-**Settings → Secrets and variables → Actions → New repository secret**
-
-| Secret | Value |
-|---|---|
-| `GH_PAT` | GitHub Personal Access Token (repo scope) |
-| `VM_A_HOST` | VM A public IP |
-| `VM_A_USER` | VM A SSH username (e.g. `azureuser`) |
-| `VM_SSH_KEY` | VM A SSH private key (full `.pem` contents) |
-| `VM_B_HOST` | VM B public IP |
-| `VM_B_USER` | VM B SSH username (e.g. `azureuser`) |
-| `VM_B_SSH_KEY` | VM B SSH private key (full `.pem` contents) |
-
-> **Note:** When provisioning new VMs, only `VM_A_HOST` and `VM_B_HOST` need updating. All other secrets remain the same.
-
-### SSH Access
-
-```bash
-# VM A — SSH on port 22 (SFTP container uses port 2222)
-ssh -i AzureSphere.pem azureuser@[VM-A-IP]
-
-# VM B
-ssh -i simulator_key.pem azureuser@[VM-B-IP]
-```
-
 ---
 
 ## Port Reference
@@ -393,6 +367,5 @@ sudo docker-compose down && sudo docker-compose up -d
 
 **Hashim Hilal**  
 Cloud Architect
----
 
 *AzureSphere is a read-only diagnostic platform. No configuration changes are made to target systems. All persona listeners are non-destructive TCP responders.*
