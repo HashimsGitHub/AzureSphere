@@ -31,9 +31,12 @@ Source Host (VM A)                    Destination Host (VM B)
 
 ---
 
-## Screenshots
+## Screenshots 
+<img width="1172" height="845" alt="image" src="https://github.com/user-attachments/assets/a173a52e-1974-4bbf-a547-b9c7ba2d6312" />
+<img width="1750" height="887" alt="image" src="https://github.com/user-attachments/assets/692976b2-39a0-4c32-a150-ba86d61070f9" />
+<img width="1767" height="790" alt="image" src="https://github.com/user-attachments/assets/437857ed-3729-4dc1-9da6-af6ee14e12de" />
 
-<!-- Screenshots will be added here -->
+
 
 ---
 
@@ -385,9 +388,7 @@ sudo docker-compose down && sudo docker-compose up -d
 ## Author
 
 **Hashim Hilal**  
-Cloud Engineer · DXC Technology  
-[github.com/HashimsGitHub](https://github.com/HashimsGitHub)
-
+Cloud Architect
 ---
 
 *AzureSphere is a read-only diagnostic platform. No configuration changes are made to target systems. All persona listeners are non-destructive TCP responders.*
