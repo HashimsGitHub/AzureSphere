@@ -317,7 +317,10 @@ func as2ReceiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	as2Mu.Unlock()
 
-	hostname, _ := os.Hostname()
+	hostname := os.Getenv("VM_HOSTNAME")
+	if hostname == "" {
+		hostname, _ = os.Hostname()
+	}
 	log.Printf("[AS2] Message received from %s: %s", msg.From, msg.Subject)
 
 	receipt := AS2Receipt{
@@ -450,7 +453,10 @@ func main() {
 		logLen := len(connLog)
 		total := totalConnects
 		connMu.Unlock()
-		hostname, _ := os.Hostname()
+		hostname := os.Getenv("VM_HOSTNAME")
+		if hostname == "" {
+			hostname, _ = os.Hostname()
+		}
 		writeJSON(w, map[string]interface{}{
 			"hostname":       hostname,
 			"uptime":         time.Since(startTime).Round(time.Second).String(),

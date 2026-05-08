@@ -37,6 +37,7 @@ services:
       - "8888:8888"   # Custom TCP App
     environment:
       API_PORT: "9090"
+      VM_HOSTNAME: "vmB"
       # ── Add as many PERSONA_n as you want ──────────────────────────────
       # Format: "Name:PROTOCOL:PORT:Optional Banner"
       # Protocols: SQL, POSTGRES, FTP, RABBITMQ, HANA, WEBMETHODS, SMB, TCP
