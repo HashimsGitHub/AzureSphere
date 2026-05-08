@@ -3,7 +3,6 @@
 > **Deploy on any Azure VM and validate real-world enterprise application connectivity between a source host and a destination host — across SQL, PostgreSQL, FTP, RabbitMQ, SAP HANA, webMethods, SMB, SFTP, HTTPS, AS2 and more.**
 
 ---
-
 ## Overview
 
 AzureSphere is a two-VM enterprise connectivity diagnostic platform built for Cloud Engineers. It simulates real-world enterprise application scenarios where VM A (source) needs to validate connectivity to VM B (destination) across multiple protocols and ports — exactly the kind of testing needed before deploying enterprise middleware, databases, and integration platforms in Azure.
