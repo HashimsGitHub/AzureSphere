@@ -841,8 +841,9 @@ function switchTab(name) {
   document.getElementById('tab-'+name).classList.add('active');
   if (name === 'as2') {
     // Fetch inbox immediately and start polling
-    const h = document.getElementById('as2-host')?.value.trim();
-    if (h) as2FetchMessages();
+    const h = document.getElementById('as2-host')?.value.trim()
+            || document.getElementById('inp-host')?.value.trim();
+    if (h) as2FetchMessages(h);
     startAS2Poll();
   } else {
     stopAS2Poll();
@@ -1769,8 +1770,9 @@ function as2GetHost() {
 function startAS2Poll() {
   if (as2PollTimer) return; // already polling
   as2PollTimer = setInterval(() => {
-    const h = document.getElementById('as2-host')?.value.trim();
-    if (h) as2FetchMessages();
+    const h = document.getElementById('as2-host')?.value.trim()
+            || document.getElementById('inp-host')?.value.trim();
+    if (h) as2FetchMessages(h);
   }, 10000);
 }
 
@@ -1803,8 +1805,8 @@ async function as2Send() {
     });
     const receipt = await resp.json();
     renderAS2Receipt(receipt);
-    // Auto-refresh inbox immediately after send
-    await as2FetchMessages();
+    // Auto-refresh inbox immediately — pass host directly, no alert risk
+    await as2FetchMessages(host);
   } catch(e) {
     renderAS2Receipt({ status: 'error', disposition: e.message });
   } finally {
@@ -1827,14 +1829,21 @@ function renderAS2Receipt(r) {
   `;
 }
 
-async function as2FetchMessages() {
-  const host = as2GetHost();
+async function as2FetchMessages(hostOverride) {
+  // Accept direct host or read from field — never alert, never block
+  const host = hostOverride
+    || document.getElementById('as2-host')?.value.trim()
+    || document.getElementById('inp-host')?.value.trim();
   if (!host) return;
+  // Keep field in sync
+  const f = document.getElementById('as2-host');
+  if (f && !f.value) f.value = host;
   try {
     const msgs = await fetchWithTimeout(`/api/vmb/messages?host=${encodeURIComponent(host)}`, 5000);
     renderAS2Inbox(Array.isArray(msgs) ? msgs : []);
   } catch(e) {
-    renderAS2Inbox([]);
+    console.warn('AS2 inbox fetch failed:', e.message);
+    // Don't clear inbox on error — keep showing last known state
   }
 }
 
@@ -1870,7 +1879,8 @@ function escHtml(s) {
 }
 
 async function as2ClearMessages() {
-  const host = as2GetHost();
+  const host = document.getElementById('as2-host')?.value.trim()
+             || document.getElementById('inp-host')?.value.trim();
   if (!host) return;
   try {
     await fetch(`/api/vmb/clear?host=${encodeURIComponent(host)}`, { method: 'POST' });
