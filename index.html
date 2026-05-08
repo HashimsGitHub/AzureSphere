@@ -943,8 +943,13 @@ async function simulateTest(target, cb) {
 function renderTargetList() {
   const el = document.getElementById('target-list');
   const empty = document.getElementById('target-empty');
-  if (targets.length === 0) { empty.style.display=''; el.innerHTML=''; el.appendChild(empty); return; }
-  empty.style.display = 'none';
+  if (!el) return;
+  if (targets.length === 0) {
+    el.innerHTML = '';
+    if (empty) { empty.style.display = ''; el.appendChild(empty); }
+    return;
+  }
+  if (empty) empty.style.display = 'none';
   el.innerHTML = '';
   targets.forEach(t => {
     const div = document.createElement('div');
