@@ -16,7 +16,7 @@ jobs:
           host:     ${{ secrets.VM_A_HOST }}
           username: ${{ secrets.VM_A_USER }}
           key:      ${{ secrets.VM_SSH_KEY }}
-          port:     22222
+          port:     2222
           timeout:  180s
           script: |
             set -e
@@ -120,7 +120,7 @@ jobs:
           host:     ${{ secrets.VM_B_HOST }}
           username: ${{ secrets.VM_B_USER }}
           key:      ${{ secrets.VM_B_SSH_KEY }}
-          port:     22
+          port:     2222
           timeout:  180s
           script: |
             set -e

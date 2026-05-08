@@ -89,7 +89,7 @@ echo ""
 IP=$(hostname -I | awk '{print $1}')
 echo "  Dashboard : https://${IP}"
 echo "  Agent API : http://${IP}:8080/api/info"
-echo "  SFTP      : sftp -P 22 testuser@${IP}"
-echo "  SSH Admin : ssh -p 22222 azureuser@${IP}"
+echo "  SFTP      : sftp -P 2222 testuser@${IP}"
+echo "  SSH Admin : ssh -p 2222 azureuser@${IP}"
 echo ""
 EOF

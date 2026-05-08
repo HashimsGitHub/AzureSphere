@@ -33,9 +33,7 @@ echo "  ✓ Certificate: CN=azuresphere-vmb (${HOSTNAME})"
 
 echo ""
 echo "[5/6] Syncing config files into place..."
-cp nginx/conf/default.conf nginx/conf/default.conf 2>/dev/null || true
-cp personas/https-persona.conf personas/https-persona.conf 2>/dev/null || true
-cp nginx/html/index.html nginx/html/index.html 2>/dev/null || true
+echo '   Config files served from repo via Docker volume mounts'
 
 echo ""
 echo "[6/6] Building & starting all containers..."
@@ -48,6 +46,7 @@ echo "  ✓ VM B Simulator deployed successfully"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "  Dashboard  : https://$(hostname -I | awk '{print $1}')"
+echo "  SSH Admin  : ssh -p 2222 $(hostname -I | awk '{print $1}')"
 echo "  Persona API: http://$(hostname -I | awk '{print $1}'):9090/api/status"
 echo ""
 echo "  Active containers:"
