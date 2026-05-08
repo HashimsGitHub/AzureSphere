@@ -466,6 +466,9 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+	mux.HandleFunc("/as2/receive",  as2ReceiveHandler)
+	mux.HandleFunc("/as2/messages", as2MessagesHandler)
+	mux.HandleFunc("/as2/clear",    as2ClearHandler)
 
 	log.Printf("VM B Simulator — %d personas active", len(personas))
 	log.Printf("Status API on :%s", apiPort)
