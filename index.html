@@ -484,7 +484,6 @@ body::before {
         <button class="proto-btn" data-proto="HANA" onclick="selectProto(this)">SAP HANA</button>
         <button class="proto-btn" data-proto="TCP" onclick="selectProto(this)">TCP</button>
       </div>
-      <div id="vmb-sync-badge" style="font-size:10px;color:var(--text-muted);margin-top:4px;min-height:14px;"></div>
 
       <div class="divider"></div>
 
@@ -750,9 +749,7 @@ IEA*1*000000001~</textarea>
         <button class="btn-run" id="btn-as2-send" onclick="as2Send()" style="flex:1">
           <i class="fas fa-exchange-alt"></i>&nbsp; Send AS2 Message
         </button>
-        <button class="btn-ghost" onclick="as2SyncPersonas()" title="Sync VM B services to protocol buttons">
-          <i class="fas fa-sync"></i>&nbsp; Sync Services
-        </button>
+
       </div>
 
       <!-- MDN Receipt -->
@@ -810,103 +807,6 @@ const PROTO_PORTS = {
   WEBMETHODS: 5555, TCP: 80
 };
 
-// ── VM B Persona Sync ─────────────────────────────────────────────────────────
-let vmBHost = '';
-let syncInterval = null;
-
-const PERSONA_PROTO_MAP = {
-  'SQL': 'SQL', 'MSSQL': 'SQL', 'SQLSERVER': 'SQL',
-  'POSTGRES': 'POSTGRES', 'POSTGRESQL': 'POSTGRES',
-  'FTP': 'FTP', 'SFTP': 'SFTP',
-  'RABBITMQ': 'RabbitMQ', 'AMQP': 'RabbitMQ',
-  'HANA': 'HANA', 'SAPHANA': 'HANA',
-  'WEBMETHODS': 'WEBMETHODS', 'WEBM': 'WEBMETHODS',
-  'SMB': 'SMB', 'TCP': 'TCP', 'HTTPS': 'HTTPS'
-};
-
-async function syncFromVMB(host) {
-  if (!host) return;
-  vmBHost = host;
-  try {
-    // Route through VM A agent to avoid CORS — agent fetches http://VMB:9090/api/personas
-    const res = await fetchWithTimeout(`/api/vmb/personas?host=${encodeURIComponent(host)}`, 5000);
-    if (!res || !Array.isArray(res)) return;
-    renderSyncedProtos(res);
-    updateSyncBadge(true, res.length);
-  } catch(e) {
-    updateSyncBadge(false, 0);
-  }
-}
-
-function renderSyncedProtos(personas) {
-  const row = document.getElementById('proto-row');
-  if (!row) return;
-
-  // Remove previously synced buttons and divider
-  row.querySelectorAll('.proto-btn.synced').forEach(b => b.remove());
-  const divider = row.querySelector('.sync-divider');
-  if (divider) divider.remove();
-
-  // Built-in protos already in the static HTML
-  const builtIn = new Set(['HTTPS','SFTP','SQL','RabbitMQ','SMB','HANA','TCP']);
-
-  const newBtns = [];
-  personas.forEach(p => {
-    const proto = PERSONA_PROTO_MAP[p.protocol?.toUpperCase()] || p.protocol;
-    if (!proto || builtIn.has(proto)) return;
-    if (row.querySelector(`[data-proto="${proto}"]`)) return;
-    const btn = document.createElement('button');
-    btn.className = 'proto-btn synced';
-    btn.dataset.proto = proto;
-    btn.dataset.port = p.port;
-    btn.title = `${p.name} — synced from VM B`;
-    btn.innerHTML = `${proto} <span style="font-size:9px;opacity:0.6">✦</span>`;
-    btn.onclick = function() { selectProto(this); };
-    PROTO_PORTS[proto] = p.port;
-    newBtns.push(btn);
-  });
-
-  if (newBtns.length > 0) {
-    const sep = document.createElement('span');
-    sep.className = 'sync-divider';
-    sep.style.cssText = 'color:var(--text-muted);font-size:10px;align-self:center;padding:0 2px;';
-    sep.textContent = '│';
-    row.appendChild(sep);
-    newBtns.forEach(b => row.appendChild(b));
-  }
-}
-
-function updateSyncBadge(ok, count) {
-  const badge = document.getElementById('vmb-sync-badge');
-  if (!badge) return;
-  if (ok && count > 0) {
-    badge.textContent = `⟳ VM B synced — ${count} services`;
-    badge.style.color = 'var(--cyan)';
-  } else if (ok) {
-    badge.textContent = '⟳ VM B — no personas';
-    badge.style.color = 'var(--text-muted)';
-  } else {
-    badge.textContent = '⟳ VM B offline';
-    badge.style.color = 'var(--text-muted)';
-  }
-}
-
-function startVMBSync(host) {
-  if (syncInterval) clearInterval(syncInterval);
-  syncFromVMB(host);
-  syncInterval = setInterval(() => syncFromVMB(host), 30000);
-}
-
-// Auto-trigger sync when user tabs out of host field
-document.addEventListener('DOMContentLoaded', () => {
-  const inp = document.getElementById('inp-host');
-  if (inp) {
-    inp.addEventListener('blur', () => {
-      const h = inp.value.trim();
-      if (h) startVMBSync(h);
-    });
-  }
-});
 
 // ══════════════════════════════════════════════
 //  CLOCK + HOSTNAME
@@ -1006,9 +906,7 @@ async function checkAgent() {
     const el = document.getElementById('vm-hostname');
     if (el) el.textContent = info.hostname || window.location.hostname;
     console.log('Agent online:', info);
-    // Agent is up — now trigger VM B sync if host is already filled in
-    const inp = document.getElementById('inp-host');
-    if (inp && inp.value.trim()) startVMBSync(inp.value.trim());
+
   } catch(e) {
     agentOnline = false;
     console.warn('Agent offline — running in simulation mode');
@@ -1951,16 +1849,8 @@ async function as2ClearMessages() {
   } catch(e) {}
 }
 
-async function as2SyncPersonas() {
-  const host = as2GetHost();
-  if (!host) return;
-  // Also update inp-host so the main sync picks it up
-  document.getElementById('inp-host').value = host;
-  await startVMBSync(host);
-  alert('VM B services synced to protocol buttons!');
-}
 
-// Auto-copy host between tabs
+// Sync host field between connectivity tab and AS2 tab
 document.addEventListener('DOMContentLoaded', () => {
   const mainHost = document.getElementById('inp-host');
   const as2Host  = document.getElementById('as2-host');

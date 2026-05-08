@@ -541,67 +541,7 @@ func handlePing(w http.ResponseWriter, r *http.Request) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 
-// GET /api/vmb/personas?host=x  — proxies VM B persona-api through agent (avoids CORS/port issues)
-func handleVMBPersonas(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodOptions {
-		writeJSON(w, http.StatusOK, nil)
-		return
-	}
-	host := r.URL.Query().Get("host")
-	if host == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "host is required"})
-		return
-	}
-	// Strip port if user passed one — always hit persona-api on 9090
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]
-	}
-	url := fmt.Sprintf("http://%s:9090/api/personas", host)
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
-		return
-	}
-	defer resp.Body.Close()
-	// Decode body before defer closes it
-	var personas interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&personas); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "invalid response from VM B: " + err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, personas)
-}
 
-// POST /api/vmb/status?host=x  — proxies VM B status through agent
-func handleVMBStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodOptions {
-		writeJSON(w, http.StatusOK, nil)
-		return
-	}
-	host := r.URL.Query().Get("host")
-	if host == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "host is required"})
-		return
-	}
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]
-	}
-	url := fmt.Sprintf("http://%s:9090/api/status", host)
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
-		return
-	}
-	defer resp.Body.Close()
-	var status interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "invalid response from VM B"})
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
-}
 
 // ─── AS2 Message Exchange ─────────────────────────────────────────────────────
 
@@ -707,8 +647,6 @@ func main() {
 	mux.HandleFunc("/api/test/dns",   handleDNS)
 	mux.HandleFunc("/api/test/tls",   handleTLS)
 	mux.HandleFunc("/api/test/ping",  handlePing)
-	mux.HandleFunc("/api/vmb/personas", handleVMBPersonas)
-	mux.HandleFunc("/api/vmb/status",   handleVMBStatus)
 	mux.HandleFunc("/api/as2/send",      handleAS2Send)
 	mux.HandleFunc("/api/vmb/messages",  handleVMBMessages)
 	mux.HandleFunc("/api/vmb/clear",     handleVMBClear)
