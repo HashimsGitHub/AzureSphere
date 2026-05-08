@@ -552,12 +552,10 @@ func handleVMBPersonas(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "host is required"})
 		return
 	}
-
 	// Strip port if user passed one — always hit persona-api on 9090
 	if idx := strings.LastIndex(host, ":"); idx != -1 {
 		host = host[:idx]
 	}
-
 	url := fmt.Sprintf("http://%s:9090/api/personas", host)
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(url)
@@ -566,16 +564,135 @@ func handleVMBPersonas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+	// Decode body before defer closes it
+	var personas interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&personas); err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "invalid response from VM B: " + err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, personas)
+}
 
-	// Stream the response body directly — it's already JSON
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(func() interface{} {
-		var v interface{}
-		json.NewDecoder(resp.Body).Decode(&v)
-		return v
-	}())
+// POST /api/vmb/status?host=x  — proxies VM B status through agent
+func handleVMBStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	host := r.URL.Query().Get("host")
+	if host == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "host is required"})
+		return
+	}
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+	url := fmt.Sprintf("http://%s:9090/api/status", host)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	var status interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "invalid response from VM B"})
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+// ─── AS2 Message Exchange ─────────────────────────────────────────────────────
+
+type AS2Message struct {
+	From      string `json:"from"`
+	To        string `json:"to"`
+	MessageID string `json:"message_id"`
+	Subject   string `json:"subject"`
+	Body      string `json:"body"`
+	Timestamp string `json:"timestamp"`
+}
+
+type AS2Receipt struct {
+	MessageID    string `json:"message_id"`
+	Status       string `json:"status"`
+	Disposition  string `json:"disposition"`
+	ReceivedAt   string `json:"received_at"`
+	From         string `json:"from"`
+	OriginalBody string `json:"original_body"`
+}
+
+// POST /api/as2/send?host=x  — sends AS2 message to VM B and returns MDN receipt
+func handleAS2Send(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	host := r.URL.Query().Get("host")
+	if host == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "host is required"})
+		return
+	}
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+	var msg AS2Message
+	if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid message body"})
+		return
+	}
+	if msg.MessageID == "" {
+		msg.MessageID = fmt.Sprintf("<%d@azuresphere-vma>", time.Now().UnixNano())
+	}
+	msg.Timestamp = time.Now().UTC().Format(time.RFC3339)
+
+	body, _ := json.Marshal(msg)
+	url := fmt.Sprintf("http://%s:9090/as2/receive", host)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(url, "application/json", strings.NewReader(string(body)))
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "VM B unreachable: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	var receipt AS2Receipt
+	if err := json.NewDecoder(resp.Body).Decode(&receipt); err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "invalid MDN from VM B"})
+		return
+	}
+	writeJSON(w, http.StatusOK, receipt)
+}
+
+
+// GET /api/vmb/messages?host=x — proxies VM B AS2 inbox
+func handleVMBMessages(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions { writeJSON(w, http.StatusOK, nil); return }
+	host := r.URL.Query().Get("host")
+	if host == "" { writeJSON(w, http.StatusBadRequest, map[string]string{"error": "host required"}); return }
+	if idx := strings.LastIndex(host, ":"); idx != -1 { host = host[:idx] }
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://%s:9090/as2/messages", host))
+	if err != nil { writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()}); return }
+	defer resp.Body.Close()
+	var v interface{}
+	json.NewDecoder(resp.Body).Decode(&v)
+	writeJSON(w, http.StatusOK, v)
+}
+
+// POST /api/vmb/clear?host=x — clears VM B AS2 inbox
+func handleVMBClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions { writeJSON(w, http.StatusOK, nil); return }
+	host := r.URL.Query().Get("host")
+	if host == "" { writeJSON(w, http.StatusBadRequest, map[string]string{"error": "host required"}); return }
+	if idx := strings.LastIndex(host, ":"); idx != -1 { host = host[:idx] }
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Post(fmt.Sprintf("http://%s:9090/as2/clear", host), "application/json", nil)
+	if err != nil { writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()}); return }
+	defer resp.Body.Close()
+	var v interface{}
+	json.NewDecoder(resp.Body).Decode(&v)
+	writeJSON(w, http.StatusOK, v)
 }
 
 func main() {
@@ -591,6 +708,10 @@ func main() {
 	mux.HandleFunc("/api/test/tls",   handleTLS)
 	mux.HandleFunc("/api/test/ping",  handlePing)
 	mux.HandleFunc("/api/vmb/personas", handleVMBPersonas)
+	mux.HandleFunc("/api/vmb/status",   handleVMBStatus)
+	mux.HandleFunc("/api/as2/send",      handleAS2Send)
+	mux.HandleFunc("/api/vmb/messages",  handleVMBMessages)
+	mux.HandleFunc("/api/vmb/clear",     handleVMBClear)
 
 	// Health check
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

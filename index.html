@@ -452,6 +452,7 @@ body::before {
   <button class="tab" onclick="switchTab('tls')">TLS / Certs</button>
   <button class="tab" onclick="switchTab('dns')">DNS</button>
   <button class="tab" onclick="switchTab('log')">Test Log</button>
+  <button class="tab" onclick="switchTab('as2')">AS2 Exchange</button>
 </div>
 
 <!-- ══════════════════════════════════════════════ -->
@@ -718,6 +719,69 @@ body::before {
   </div>
 </div>
 
+
+<!-- ══════════════════════════════════════════════ -->
+<!--  TAB: AS2 EXCHANGE                            -->
+<!-- ══════════════════════════════════════════════ -->
+<div id="tab-as2" class="tab-content">
+  <div class="main-grid">
+
+    <!-- LEFT: Send Message (VM A → VM B) -->
+    <div class="panel">
+      <div class="panel-title"><i class="fas fa-paper-plane"></i> AS2 Message — VM A → VM B</div>
+
+      <div class="section-label">VM B Target</div>
+      <input class="inp" id="as2-host" placeholder="VM B IP or hostname" type="text" />
+
+      <div class="section-label" style="margin-top:12px">Subject</div>
+      <input class="inp" id="as2-subject" placeholder="e.g. Daily Transaction Sync" type="text" value="AzureSphere Test Message" />
+
+      <div class="section-label" style="margin-top:12px">Message Body</div>
+      <textarea class="inp" id="as2-body" rows="6" placeholder="Enter AS2 message payload..." style="resize:vertical;font-family:var(--mono);font-size:12px">ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *260508*1200*^*00501*000000001*0*P*>~
+GS*FA*SENDER*RECEIVER*20260508*1200*1*X*005010X231A1~
+ST*997*0001~
+AK1*PO*1~
+AK9*A*1*1*1~
+SE*4*0001~
+GE*1*1~
+IEA*1*000000001~</textarea>
+
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn-run" id="btn-as2-send" onclick="as2Send()" style="flex:1">
+          <i class="fas fa-exchange-alt"></i>&nbsp; Send AS2 Message
+        </button>
+        <button class="btn-ghost" onclick="as2SyncPersonas()" title="Sync VM B services to protocol buttons">
+          <i class="fas fa-sync"></i>&nbsp; Sync Services
+        </button>
+      </div>
+
+      <!-- MDN Receipt -->
+      <div id="as2-receipt-panel" style="display:none;margin-top:16px">
+        <div class="section-label">MDN Receipt from VM B</div>
+        <div class="kv-list" id="as2-receipt-kv"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: VM B Inbox -->
+    <div class="panel">
+      <div class="panel-title">
+        <i class="fas fa-inbox"></i> VM B Inbox
+        <button class="btn-ghost" onclick="as2FetchMessages()" style="margin-left:auto;font-size:11px">
+          <i class="fas fa-sync"></i> Refresh
+        </button>
+        <button class="btn-ghost danger" onclick="as2ClearMessages()" style="font-size:11px">
+          <i class="fas fa-trash"></i> Clear
+        </button>
+      </div>
+      <div id="as2-inbox-empty" class="empty">
+        <i class="fas fa-inbox"></i><br>No messages received yet.
+      </div>
+      <div id="as2-inbox-list" style="display:none;max-height:480px;overflow-y:auto"></div>
+    </div>
+
+  </div>
+</div>
+
 <!-- FOOTER -->
 <div class="footer">
   <div>© 2026 AzureSphere · Digital Twin · Enterprise Connectivity Diagnostic</div>
@@ -865,7 +929,7 @@ document.getElementById('vm-hostname').textContent =
 // ══════════════════════════════════════════════
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    const tabs = ['connectivity','tls','dns','log'];
+    const tabs = ['connectivity','tls','dns','log','as2'];
     t.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1776,6 +1840,136 @@ function clearLog() {
 renderTargetList();
 renderPortCards();
 updateStats();
+
+// ══════════════════════════════════════════════
+//  AS2 EXCHANGE
+// ══════════════════════════════════════════════
+
+function as2GetHost() {
+  const h = document.getElementById('as2-host').value.trim()
+           || document.getElementById('inp-host').value.trim();
+  if (!h) { alert('Enter VM B IP or hostname first'); return null; }
+  document.getElementById('as2-host').value = h;
+  return h;
+}
+
+async function as2Send() {
+  const host = as2GetHost();
+  if (!host) return;
+  const subject = document.getElementById('as2-subject').value.trim() || 'AzureSphere Message';
+  const body    = document.getElementById('as2-body').value.trim();
+  if (!body) { alert('Message body cannot be empty'); return; }
+
+  const btn = document.getElementById('btn-as2-send');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>&nbsp; Sending...';
+
+  try {
+    const resp = await fetch(`/api/as2/send?host=${encodeURIComponent(host)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: window.location.hostname || 'VM-A',
+        to:   host,
+        subject,
+        body,
+        message_id: `<${Date.now()}@azuresphere-vma>`
+      })
+    });
+    const receipt = await resp.json();
+    renderAS2Receipt(receipt);
+    // Auto-refresh inbox
+    setTimeout(() => as2FetchMessages(), 500);
+  } catch(e) {
+    renderAS2Receipt({ status: 'error', disposition: e.message });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-exchange-alt"></i>&nbsp; Send AS2 Message';
+  }
+}
+
+function renderAS2Receipt(r) {
+  const panel = document.getElementById('as2-receipt-panel');
+  const kv    = document.getElementById('as2-receipt-kv');
+  panel.style.display = '';
+  const statusColor = r.status === 'processed' ? 'var(--green)' : 'var(--red)';
+  kv.innerHTML = `
+    <div class="kv"><span class="k">Status</span><span class="v" style="color:${statusColor};font-weight:600">${r.status || '—'}</span></div>
+    <div class="kv"><span class="k">Message-ID</span><span class="v" style="font-size:11px">${r.message_id || '—'}</span></div>
+    <div class="kv"><span class="k">Disposition</span><span class="v" style="font-size:11px">${r.disposition || '—'}</span></div>
+    <div class="kv"><span class="k">Received At</span><span class="v">${r.received_at || '—'}</span></div>
+    <div class="kv"><span class="k">From (VM B)</span><span class="v">${r.from || '—'}</span></div>
+  `;
+}
+
+async function as2FetchMessages() {
+  const host = as2GetHost();
+  if (!host) return;
+  try {
+    const msgs = await fetchWithTimeout(`/api/vmb/messages?host=${encodeURIComponent(host)}`, 5000);
+    renderAS2Inbox(Array.isArray(msgs) ? msgs : []);
+  } catch(e) {
+    renderAS2Inbox([]);
+  }
+}
+
+function renderAS2Inbox(msgs) {
+  const empty = document.getElementById('as2-inbox-empty');
+  const list  = document.getElementById('as2-inbox-list');
+  if (!msgs.length) {
+    empty.style.display = '';
+    list.style.display  = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  list.style.display  = '';
+  list.innerHTML = msgs.map(m => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;background:var(--bg2)">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <span style="color:var(--cyan);font-weight:600;font-size:12px">${m.subject || 'No Subject'}</span>
+        <span style="color:var(--text-muted);font-size:11px">${m.timestamp || ''}</span>
+      </div>
+      <div class="kv-list" style="margin-bottom:8px">
+        <div class="kv"><span class="k">From</span><span class="v">${m.from || '—'}</span></div>
+        <div class="kv"><span class="k">Message-ID</span><span class="v" style="font-size:11px">${m.message_id || '—'}</span></div>
+      </div>
+      <pre style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:150px;overflow-y:auto;color:var(--text-dim);margin:0">${escHtml(m.body || '')}</pre>
+    </div>
+  `).join('');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function as2ClearMessages() {
+  const host = as2GetHost();
+  if (!host) return;
+  try {
+    await fetch(`/api/vmb/clear?host=${encodeURIComponent(host)}`, { method: 'POST' });
+    renderAS2Inbox([]);
+  } catch(e) {}
+}
+
+async function as2SyncPersonas() {
+  const host = as2GetHost();
+  if (!host) return;
+  // Also update inp-host so the main sync picks it up
+  document.getElementById('inp-host').value = host;
+  await startVMBSync(host);
+  alert('VM B services synced to protocol buttons!');
+}
+
+// Auto-copy host between tabs
+document.addEventListener('DOMContentLoaded', () => {
+  const mainHost = document.getElementById('inp-host');
+  const as2Host  = document.getElementById('as2-host');
+  if (mainHost && as2Host) {
+    mainHost.addEventListener('input', () => { if (!as2Host.value) as2Host.value = mainHost.value; });
+    as2Host.addEventListener('input', () => { if (!mainHost.value) mainHost.value = as2Host.value; });
+  }
+});
+
 </script>
 </body>
 </html>

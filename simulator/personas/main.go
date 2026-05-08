@@ -271,6 +271,92 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	json.NewEncoder(w).Encode(v)
 }
 
+
+// ─── AS2 Message Store ────────────────────────────────────────────────────────
+
+type AS2Message struct {
+	From      string `json:"from"`
+	To        string `json:"to"`
+	MessageID string `json:"message_id"`
+	Subject   string `json:"subject"`
+	Body      string `json:"body"`
+	Timestamp string `json:"timestamp"`
+}
+
+type AS2Receipt struct {
+	MessageID    string `json:"message_id"`
+	Status       string `json:"status"`
+	Disposition  string `json:"disposition"`
+	ReceivedAt   string `json:"received_at"`
+	From         string `json:"from"`
+	OriginalBody string `json:"original_body"`
+}
+
+var (
+	as2Messages []AS2Message
+	as2Mu       sync.Mutex
+)
+
+// POST /as2/receive — receives AS2 message from VM A, returns MDN receipt
+func as2ReceiveHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var msg AS2Message
+	if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	msg.Timestamp = time.Now().UTC().Format(time.RFC3339)
+
+	as2Mu.Lock()
+	as2Messages = append([]AS2Message{msg}, as2Messages...)
+	if len(as2Messages) > 200 {
+		as2Messages = as2Messages[:200]
+	}
+	as2Mu.Unlock()
+
+	hostname, _ := os.Hostname()
+	log.Printf("[AS2] Message received from %s: %s", msg.From, msg.Subject)
+
+	receipt := AS2Receipt{
+		MessageID:    msg.MessageID,
+		Status:       "processed",
+		Disposition:  "automatic-action/MDN-sent-automatically; processed",
+		ReceivedAt:   msg.Timestamp,
+		From:         hostname,
+		OriginalBody: msg.Body,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(receipt)
+}
+
+// GET /as2/messages — returns received AS2 messages
+func as2MessagesHandler(w http.ResponseWriter, r *http.Request) {
+	as2Mu.Lock()
+	defer as2Mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(as2Messages)
+}
+
+// DELETE /as2/messages — clears AS2 message store
+func as2ClearHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	as2Mu.Lock()
+	cleared := len(as2Messages)
+	as2Messages = []AS2Message{}
+	as2Mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(map[string]interface{}{"cleared": cleared})
+}
+
 func main() {
 	// Load personas from environment — one per env var PERSONA_n=name:protocol:port:banner
 	// e.g. PERSONA_1=SQL Server:SQL:1433:
