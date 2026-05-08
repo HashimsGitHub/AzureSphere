@@ -285,6 +285,25 @@ body::before {
 
 </div>
 
+<!-- AS2 Inbox Panel -->
+<div style="margin-top:24px">
+  <div class="panel">
+    <div class="panel-title">
+      <i class="fas fa-envelope-open-text"></i> AS2 Inbox
+      <span id="as2-count" style="margin-left:8px;font-size:10px;color:var(--text-muted)"></span>
+      <button onclick="clearAS2()" style="margin-left:auto;background:none;border:1px solid var(--border);color:var(--text-muted);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">
+        <i class="fas fa-trash"></i>&nbsp; Clear
+      </button>
+    </div>
+    <div class="section-label">Messages received from VM A via AS2</div>
+    <div id="as2-empty" style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">
+      <i class="fas fa-inbox" style="font-size:24px;margin-bottom:8px;display:block;opacity:0.3"></i>
+      No AS2 messages received yet
+    </div>
+    <div id="as2-list" style="display:none;max-height:400px;overflow-y:auto"></div>
+  </div>
+</div>
+
 <div class="footer">
   <div>© 2026 AzureSphere · Enterprise Connectivity Diagnostic Platform</div>
   <div><a href="https://github.com/HashimsGitHub/AzureSphere" target="_blank"><i class="fab fa-github"></i> GitHub</a></div>
@@ -470,6 +489,51 @@ function startRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => { if (!paused) loadData(); }, 5000);
 }
+
+
+// ── AS2 Inbox ─────────────────────────────────────────────────────────────────
+async function loadAS2() {
+  try {
+    const msgs = await fetch('/as2/messages').then(r => r.json());
+    const empty = document.getElementById('as2-empty');
+    const list  = document.getElementById('as2-list');
+    const count = document.getElementById('as2-count');
+    if (!msgs || !msgs.length) {
+      empty.style.display = '';
+      list.style.display  = 'none';
+      if (count) count.textContent = '';
+      return;
+    }
+    if (count) count.textContent = `${msgs.length} message${msgs.length !== 1 ? 's' : ''}`;
+    empty.style.display = 'none';
+    list.style.display  = '';
+    list.innerHTML = msgs.map(m => `
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;background:var(--bg)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="color:var(--amber);font-weight:600;font-size:12px">${esc(m.subject || 'No Subject')}</span>
+          <span style="color:var(--text-muted);font-size:11px">${m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : ''}</span>
+        </div>
+        <div style="display:flex;gap:16px;margin-bottom:8px;font-size:11px">
+          <span><span style="color:var(--text-muted)">From:</span> <span style="color:#fff">${esc(m.from || '—')}</span></span>
+          <span><span style="color:var(--text-muted)">ID:</span> <span style="color:var(--text-dim);font-family:monospace">${esc(m.message_id || '—')}</span></span>
+        </div>
+        <pre style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto;color:var(--text-dim);margin:0;font-family:monospace">${esc(m.body || '')}</pre>
+      </div>
+    `).join('');
+  } catch(e) { /* silently fail */ }
+}
+
+async function clearAS2(btn) {
+  try {
+    await fetch('/as2/clear', { method: 'POST' });
+    document.getElementById('as2-list').style.display = 'none';
+    document.getElementById('as2-empty').style.display = '';
+    document.getElementById('as2-count').textContent = '';
+  } catch(e) {}
+}
+
+loadAS2();
+setInterval(loadAS2, 5000);
 
 loadData();
 startRefresh();

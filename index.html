@@ -762,18 +762,23 @@ IEA*1*000000001~</textarea>
     <!-- RIGHT: VM B Inbox -->
     <div class="panel">
       <div class="panel-title">
-        <i class="fas fa-inbox"></i> VM B Inbox
-        <button class="btn-ghost" onclick="as2FetchMessages()" style="margin-left:auto;font-size:11px">
+        <i class="fas fa-inbox"></i> VM B Received Messages
+        <span id="as2-inbox-badge" style="margin-left:8px;font-size:10px;color:var(--text-muted)"></span>
+        <button class="btn-ghost" onclick="as2FetchMessages()" style="margin-left:auto;font-size:11px" title="Manually refresh VM B inbox">
           <i class="fas fa-sync"></i> Refresh
         </button>
-        <button class="btn-ghost danger" onclick="as2ClearMessages()" style="font-size:11px">
-          <i class="fas fa-trash"></i> Clear
+        <button class="btn-ghost" onclick="as2ClearMessages()" style="font-size:11px;color:var(--red)" title="Wipe all messages from VM B inbox">
+          <i class="fas fa-trash"></i> Clear VM B
         </button>
       </div>
-      <div id="as2-inbox-empty" class="empty">
-        <i class="fas fa-inbox"></i><br>No messages received yet.
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:10px">
+        Messages received by VM B from this host. Auto-refreshes every 10s.
       </div>
-      <div id="as2-inbox-list" style="display:none;max-height:480px;overflow-y:auto"></div>
+      <div id="as2-inbox-empty" class="empty">
+        <i class="fas fa-inbox"></i><br>No messages in VM B inbox yet.<br>
+        <span style="font-size:10px">Send an AS2 message to see it appear here.</span>
+      </div>
+      <div id="as2-inbox-list" style="display:none;max-height:440px;overflow-y:auto"></div>
     </div>
 
   </div>
@@ -834,6 +839,14 @@ function switchTab(name) {
   });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
+  if (name === 'as2') {
+    // Fetch inbox immediately and start polling
+    const h = document.getElementById('as2-host')?.value.trim();
+    if (h) as2FetchMessages();
+    startAS2Poll();
+  } else {
+    stopAS2Poll();
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -1743,12 +1756,26 @@ updateStats();
 //  AS2 EXCHANGE
 // ══════════════════════════════════════════════
 
+let as2PollTimer = null;
+
 function as2GetHost() {
   const h = document.getElementById('as2-host').value.trim()
            || document.getElementById('inp-host').value.trim();
   if (!h) { alert('Enter VM B IP or hostname first'); return null; }
   document.getElementById('as2-host').value = h;
   return h;
+}
+
+function startAS2Poll() {
+  if (as2PollTimer) return; // already polling
+  as2PollTimer = setInterval(() => {
+    const h = document.getElementById('as2-host')?.value.trim();
+    if (h) as2FetchMessages();
+  }, 10000);
+}
+
+function stopAS2Poll() {
+  if (as2PollTimer) { clearInterval(as2PollTimer); as2PollTimer = null; }
 }
 
 async function as2Send() {
@@ -1776,8 +1803,8 @@ async function as2Send() {
     });
     const receipt = await resp.json();
     renderAS2Receipt(receipt);
-    // Auto-refresh inbox
-    setTimeout(() => as2FetchMessages(), 500);
+    // Auto-refresh inbox immediately after send
+    await as2FetchMessages();
   } catch(e) {
     renderAS2Receipt({ status: 'error', disposition: e.message });
   } finally {
@@ -1814,6 +1841,8 @@ async function as2FetchMessages() {
 function renderAS2Inbox(msgs) {
   const empty = document.getElementById('as2-inbox-empty');
   const list  = document.getElementById('as2-inbox-list');
+  const badge = document.getElementById('as2-inbox-badge');
+  if (badge) badge.textContent = msgs.length ? `${msgs.length} message${msgs.length !== 1 ? 's' : ''}` : '';
   if (!msgs.length) {
     empty.style.display = '';
     list.style.display  = 'none';
