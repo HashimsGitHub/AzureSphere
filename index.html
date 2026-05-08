@@ -824,13 +824,27 @@ function addAndRun() {
   });
 }
 
-// ── Agent API — always relative URLs so public IP / private IP / localhost all work ──
+const FETCH_TIMEOUT = 15000;
+
+async function fetchWithTimeout(url, ms = FETCH_TIMEOUT) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: controller.signal });
+    return r.json();
+  } catch(e) {
+    throw new Error(e.name === 'AbortError' ? `Timed out after ${ms/1000}s` : e.message);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const API = {
-  tcp:  (host, port) => fetch(`/api/test/tcp?host=${encodeURIComponent(host)}&port=${port}`).then(r=>r.json()),
-  tls:  (host, port) => fetch(`/api/test/tls?host=${encodeURIComponent(host)}&port=${port}`).then(r=>r.json()),
-  dns:  (host)       => fetch(`/api/test/dns?host=${encodeURIComponent(host)}`).then(r=>r.json()),
-  ping: (host)       => fetch(`/api/test/ping?host=${encodeURIComponent(host)}`).then(r=>r.json()),
-  info: ()           => fetch(`/api/info`).then(r=>r.json()),
+  tcp:  (host, port) => fetchWithTimeout(`/api/test/tcp?host=${encodeURIComponent(host)}&port=${port}`),
+  tls:  (host, port) => fetchWithTimeout(`/api/test/tls?host=${encodeURIComponent(host)}&port=${port}`),
+  dns:  (host)       => fetchWithTimeout(`/api/test/dns?host=${encodeURIComponent(host)}`),
+  ping: (host)       => fetchWithTimeout(`/api/test/ping?host=${encodeURIComponent(host)}`),
+  info: ()           => fetchWithTimeout(`/api/info`, 5000),
 };
 
 // Check agent availability on load
