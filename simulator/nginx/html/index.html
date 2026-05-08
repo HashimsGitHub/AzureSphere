@@ -103,7 +103,7 @@ body::before {
 .conn-table tr:hover td { background:rgba(255,179,0,0.03); }
 .conn-table tr.new-row td { animation:flash .8s ease-out; }
 @keyframes flash { 0%{background:rgba(255,179,0,0.12)} 100%{background:transparent} }
-.log-wrap { max-height:520px; overflow-y:auto; }
+.log-wrap { height:320px; max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; }
 .ip-tag { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; background:var(--green-dim); color:var(--green); border:1px solid rgba(0,230,118,0.2); }
 .inp { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 12px; font-family:var(--mono); font-size:12px; color:#fff; outline:none; transition:border-color .2s; width:100%; }
 .inp:focus { border-color:var(--amber); }
@@ -281,27 +281,25 @@ body::before {
         <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">Refreshes every 5s</span>
       </div>
     </div>
+
+    <!-- AS2 Inbox — directly below connection log -->
+    <div class="panel" style="margin-top:20px">
+      <div class="panel-title">
+        <i class="fas fa-envelope-open-text"></i> AS2 Inbox
+        <span id="as2-count" style="margin-left:8px;font-size:10px;color:var(--text-muted)"></span>
+        <button onclick="clearAS2()" style="margin-left:auto;background:none;border:1px solid var(--border);color:var(--text-muted);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">
+          <i class="fas fa-trash"></i>&nbsp; Clear
+        </button>
+      </div>
+      <div class="section-label">Messages received from VM A via AS2</div>
+      <div id="as2-empty" style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">
+        <i class="fas fa-inbox" style="font-size:24px;margin-bottom:8px;display:block;opacity:0.3"></i>
+        No AS2 messages received yet
+      </div>
+      <div id="as2-list" style="display:none;max-height:360px;overflow-y:auto"></div>
+    </div>
   </div>
 
-</div>
-
-<!-- AS2 Inbox Panel -->
-<div style="margin-top:24px">
-  <div class="panel">
-    <div class="panel-title">
-      <i class="fas fa-envelope-open-text"></i> AS2 Inbox
-      <span id="as2-count" style="margin-left:8px;font-size:10px;color:var(--text-muted)"></span>
-      <button onclick="clearAS2()" style="margin-left:auto;background:none;border:1px solid var(--border);color:var(--text-muted);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">
-        <i class="fas fa-trash"></i>&nbsp; Clear
-      </button>
-    </div>
-    <div class="section-label">Messages received from VM A via AS2</div>
-    <div id="as2-empty" style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">
-      <i class="fas fa-inbox" style="font-size:24px;margin-bottom:8px;display:block;opacity:0.3"></i>
-      No AS2 messages received yet
-    </div>
-    <div id="as2-list" style="display:none;max-height:400px;overflow-y:auto"></div>
-  </div>
 </div>
 
 <div class="footer">
