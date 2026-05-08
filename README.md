@@ -366,6 +366,6 @@ sudo docker-compose down && sudo docker-compose up -d
 ## Author
 
 **Hashim Hilal**  
-Cloud Architect
+Azure Architect
 
 *AzureSphere is a read-only diagnostic platform. No configuration changes are made to target systems. All persona listeners are non-destructive TCP responders.*
