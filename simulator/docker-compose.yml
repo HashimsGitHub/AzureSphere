@@ -33,7 +33,7 @@ services:
       - "5672:5672"   # RabbitMQ
       - "30015:30015" # SAP HANA
       - "5555:5555"   # webMethods
-      # - "445:445"   # SMB - DISABLED for security
+      - "445:445"   # SMB - Azure Files / Windows File Shares
       - "8888:8888"   # Custom TCP App
     environment:
       API_PORT: "9090"
@@ -47,7 +47,7 @@ services:
       PERSONA_4: "RabbitMQ 3.12:RABBITMQ:5672:"
       PERSONA_5: "SAP HANA:HANA:30015:"
       PERSONA_6: "webMethods IS:WEBMETHODS:5555:"
-      # PERSONA_7: "SMB File Share:SMB:445:"  # DISABLED - Security risk
+      PERSONA_7: "SMB File Share / Azure Files:SMB:445:"
       PERSONA_8: "Custom TCP App:TCP:8888:220 Custom App Ready"
     networks:
       - azuresphere-net
