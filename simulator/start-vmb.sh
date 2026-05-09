@@ -3,13 +3,14 @@ set -e
 
 # ══════════════════════════════════════════════════════════════
 #  AzureSphere — VM B (Destination Host / Target Simulator)
-#  Downloads release tarball, extracts assets, starts containers
-#  No GitHub Actions · No secrets · No code changes
+#  Clones repo from GitHub, builds persona-server from source,
+#  starts containers.
+#  No GitHub Actions · No release tarballs · No secrets
 # ══════════════════════════════════════════════════════════════
 
-REPO="HashimsGitHub/AzureSphere"
-RELEASE_URL="https://github.com/${REPO}/releases/latest/download/azuresphere-vmb.tar.gz"
+REPO="https://github.com/HashimsGitHub/AzureSphere.git"
 INSTALL_DIR="$HOME/AzureSphere/simulator"
+REPO_DIR="$HOME/AzureSphere"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  AzureSphere — Destination Host (VM B)"
@@ -19,7 +20,7 @@ echo ""
 # ── [1/6] Dependencies ────────────────────────────────────────
 echo "[1/6] Installing dependencies..."
 sudo apt-get update -y -qq
-sudo apt-get install -y docker.io docker-compose openssl curl tar 2>&1 \
+sudo apt-get install -y docker.io docker-compose openssl curl git 2>&1 \
   | grep -E "^(Setting up|Get:|Err:)" || true
 
 # ── [2/6] Docker ──────────────────────────────────────────────
@@ -28,38 +29,30 @@ echo "[2/6] Starting Docker..."
 sudo systemctl enable docker
 sudo systemctl start docker
 
-# ── [3/6] Download & extract release bundle ───────────────────
+# ── [3/6] Clone / update repo ─────────────────────────────────
 echo ""
-echo "[3/6] Downloading release bundle..."
+echo "[3/6] Fetching latest source from GitHub..."
 
-mkdir -p "${INSTALL_DIR}"
-TMP=$(mktemp -d)
-trap 'rm -rf "${TMP}"' EXIT
-
-curl -fsSL --progress-bar "${RELEASE_URL}" -o "${TMP}/azuresphere-vmb.tar.gz" \
-  || { echo "  ✗ Failed to download release from ${RELEASE_URL}"; exit 1; }
-
-echo "  Extracting..."
-tar -xzf "${TMP}/azuresphere-vmb.tar.gz" -C "${TMP}" --strip-components=1
-
-# Copy all assets — preserving exact simulator/ repo layout
-cp "${TMP}/docker-compose.yml"                   "${INSTALL_DIR}/docker-compose.yml"
-mkdir -p "${INSTALL_DIR}/personas"
-cp "${TMP}/personas/persona-server"              "${INSTALL_DIR}/personas/persona-server"
-cp "${TMP}/personas/https-persona.conf"          "${INSTALL_DIR}/personas/https-persona.conf"
-chmod +x "${INSTALL_DIR}/personas/persona-server"
-mkdir -p "${INSTALL_DIR}/sftp-data"
-echo "  ✓ Assets extracted"
+if [ -d "${REPO_DIR}/.git" ]; then
+  echo "  Repo already present — pulling latest main..."
+  git -C "${REPO_DIR}" fetch origin
+  git -C "${REPO_DIR}" reset --hard origin/main
+else
+  git clone --depth=1 "${REPO}" "${REPO_DIR}"
+fi
+echo "  ✓ Repository ready ($(git -C ${REPO_DIR} rev-parse --short HEAD))"
 
 # ── [4/6] Directory structure ─────────────────────────────────
 echo ""
 echo "[4/6] Creating directory structure..."
 mkdir -p "${INSTALL_DIR}/nginx/conf"
 mkdir -p "${INSTALL_DIR}/nginx/certs"
-mkdir -p "${INSTALL_DIR}/nginx/html"
+mkdir -p "${INSTALL_DIR}/sftp-data"
 
-# FIX: nginx/conf/default.conf and nginx/html/index.html are not included
-# in the release tarball — write them inline instead of copying from TMP
+# Dashboard HTML and nginx config come directly from the cloned repo
+cp "${REPO_DIR}/simulator/nginx/html/index.html" "${INSTALL_DIR}/nginx/html/index.html" 2>/dev/null || true
+
+# Write nginx config inline (generated at deploy time with correct port)
 cat > "${INSTALL_DIR}/nginx/conf/default.conf" << 'NGINXEOF'
 server {
     listen 443 ssl;
@@ -89,6 +82,18 @@ server {
         if ($request_method = OPTIONS) { return 204; }
     }
 
+    location /as2/ {
+        proxy_pass         http://host.docker.internal:9090/as2/;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_read_timeout 30s;
+        add_header Access-Control-Allow-Origin  * always;
+        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Content-Type" always;
+        if ($request_method = OPTIONS) { return 204; }
+    }
+
     location /health {
         proxy_pass http://host.docker.internal:9090/health;
     }
@@ -100,32 +105,16 @@ server {
     return 301 https://$host$request_uri;
 }
 NGINXEOF
+echo "  ✓ nginx/conf/default.conf"
 
-cat > "${INSTALL_DIR}/nginx/html/index.html" << 'HTMLEOF'
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AzureSphere — VM B</title>
-  <style>
-    body { font-family: sans-serif; background: #0f172a; color: #e2e8f0; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .card { background: #1e293b; border-radius: 12px; padding: 2rem 3rem; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
-    h1 { color: #38bdf8; margin-bottom: 0.5rem; }
-    p  { color: #94a3b8; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>AzureSphere</h1>
-    <p>Destination Host — VM B</p>
-    <p>Persona API: <code>http://&lt;host&gt;:9090/api/status</code></p>
-  </div>
-</body>
-</html>
-HTMLEOF
+# Use docker-compose.yml from the cloned repo (simulator subdirectory)
+cp "${REPO_DIR}/simulator/docker-compose.yml" "${INSTALL_DIR}/docker-compose.yml"
+echo "  ✓ docker-compose.yml (from repo)"
 
-echo "  ✓ nginx config and dashboard HTML"
+# Copy personas config from repo
+mkdir -p "${INSTALL_DIR}/personas"
+cp "${REPO_DIR}/simulator/personas/https-persona.conf" "${INSTALL_DIR}/personas/https-persona.conf"
+echo "  ✓ personas/https-persona.conf"
 
 # ── [5/6] SSL certificate ─────────────────────────────────────
 echo ""
@@ -145,28 +134,19 @@ else
   echo "  ✓ Existing certificate found — skipping"
 fi
 
-# ── [6/6] Start containers ────────────────────────────────────
+# ── [6/6] Build & start containers ───────────────────────────
 echo ""
-echo "[6/6] Starting containers..."
+echo "[6/6] Building persona-server from source and starting containers..."
 cd "${INSTALL_DIR}"
 
-# Override docker-compose persona-api service to use pre-built binary
-# instead of building from source — all other services unchanged
-# FIX: removed 'build: ~' (null is invalid); omitting build key causes
-# Docker Compose to use the image: value instead, which is correct behaviour
-cat > "${INSTALL_DIR}/docker-compose.override.yml" << OVERRIDEEOF
-services:
-  persona-api:
-    image: alpine:3.19
-    entrypoint: ["/app/persona-server"]
-    volumes:
-      - ${INSTALL_DIR}/personas/persona-server:/app/persona-server:ro
-OVERRIDEEOF
-
-sudo docker-compose pull --quiet 2>/dev/null || true
+# persona-api uses 'build: ./personas' in docker-compose.yml
+# Docker builds it fresh from the cloned Go source — no pre-built binary needed
+# No docker-compose.override.yml required
+sudo docker-compose build --no-cache persona-api
+sudo docker-compose pull --quiet dashboard persona-https persona-sftp 2>/dev/null || true
 sudo docker-compose up -d
 
-# Wait for nginx then reload (mirrors deploy.yml logic exactly)
+# Wait for nginx then reload
 echo ""
 echo "  Waiting for nginx to be ready..."
 for i in $(seq 1 15); do
@@ -201,5 +181,6 @@ echo "  Active containers:"
 sudo docker-compose ps
 echo ""
 echo "  Troubleshooting:"
-echo "  sudo docker-compose -f ${INSTALL_DIR}/docker-compose.yml logs persona-api"
+echo "  sudo docker-compose logs persona-api"
 echo "  curl http://localhost:9090/api/status"
+echo ""
