@@ -25,8 +25,8 @@ case "$CHOICE" in
   2)
     echo "  → Starting as Destination Host (VM B)..."
     echo ""
-    chmod +x "$(dirname "$0")/start-vmb.sh"
-    bash "$(dirname "$0")/start-vmb.sh"
+    chmod +x "$(dirname "$0")/simulator/start-vmb.sh"
+    bash "$(dirname "$0")/simulator/start-vmb.sh"
     ;;
   *)
     echo "  ✗ Invalid choice. Please enter 1 or 2."
