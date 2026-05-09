@@ -49,8 +49,7 @@ mkdir -p "${INSTALL_DIR}/nginx/conf"
 mkdir -p "${INSTALL_DIR}/nginx/certs"
 mkdir -p "${INSTALL_DIR}/sftp-data"
 
-# Dashboard HTML and nginx config come directly from the cloned repo
-cp "${REPO_DIR}/simulator/nginx/html/index.html" "${INSTALL_DIR}/nginx/html/index.html" 2>/dev/null || true
+# index.html, docker-compose.yml and personas/ are all already in place from the git clone
 
 # Write nginx config inline (generated at deploy time with correct port)
 cat > "${INSTALL_DIR}/nginx/conf/default.conf" << 'NGINXEOF'
@@ -107,14 +106,10 @@ server {
 NGINXEOF
 echo "  ✓ nginx/conf/default.conf"
 
-# Use docker-compose.yml from the cloned repo (simulator subdirectory)
-cp "${REPO_DIR}/simulator/docker-compose.yml" "${INSTALL_DIR}/docker-compose.yml"
+# docker-compose.yml and personas/ are already in place from the git clone
+# (INSTALL_DIR is $HOME/AzureSphere/simulator — inside the cloned repo)
 echo "  ✓ docker-compose.yml (from repo)"
-
-# Copy personas config from repo
-mkdir -p "${INSTALL_DIR}/personas"
-cp "${REPO_DIR}/simulator/personas/https-persona.conf" "${INSTALL_DIR}/personas/https-persona.conf"
-echo "  ✓ personas/https-persona.conf"
+echo "  ✓ personas/https-persona.conf (from repo)"
 
 # ── [5/6] SSL certificate ─────────────────────────────────────
 echo ""
