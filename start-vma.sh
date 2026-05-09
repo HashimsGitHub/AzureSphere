@@ -130,10 +130,11 @@ cd "${INSTALL_DIR}"
 
 # Override docker-compose agent service to use pre-built binary
 # instead of building from source — all other services unchanged
+# FIX: removed 'build: ~' (null is invalid); omitting build key causes
+# Docker Compose to use the image: value instead, which is correct behaviour
 cat > "${INSTALL_DIR}/docker-compose.override.yml" << OVERRIDEEOF
 services:
   agent:
-    build: ~
     image: alpine:3.19
     entrypoint: ["/app/agent"]
     volumes:
