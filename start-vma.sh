@@ -3,12 +3,11 @@ set -e
 
 # ══════════════════════════════════════════════════════════════
 #  AzureSphere — VM A (Source Host)
-#  Downloads release tarball, extracts assets, starts containers
-#  No GitHub Actions · No secrets · No code changes
+#  Clones repo from GitHub, builds agent from source, starts
+#  containers. No GitHub Actions · No release tarballs · No secrets
 # ══════════════════════════════════════════════════════════════
 
-REPO="HashimsGitHub/AzureSphere"
-RELEASE_URL="https://github.com/${REPO}/releases/latest/download/azuresphere-vma.tar.gz"
+REPO="https://github.com/HashimsGitHub/AzureSphere.git"
 INSTALL_DIR="$HOME/AzureSphere"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -19,7 +18,7 @@ echo ""
 # ── [1/6] Dependencies ────────────────────────────────────────
 echo "[1/6] Installing dependencies..."
 sudo apt-get update -y -qq
-sudo apt-get install -y docker.io docker-compose openssl curl tar 2>&1 \
+sudo apt-get install -y docker.io docker-compose openssl curl git 2>&1 \
   | grep -E "^(Setting up|Get:|Err:)" || true
 
 # ── [2/6] Docker ──────────────────────────────────────────────
@@ -28,28 +27,18 @@ echo "[2/6] Starting Docker..."
 sudo systemctl enable docker
 sudo systemctl start docker
 
-# ── [3/6] Download & extract release bundle ───────────────────
+# ── [3/6] Clone / update repo ─────────────────────────────────
 echo ""
-echo "[3/6] Downloading release bundle..."
+echo "[3/6] Fetching latest source from GitHub..."
 
-mkdir -p "${INSTALL_DIR}"
-TMP=$(mktemp -d)
-trap 'rm -rf "${TMP}"' EXIT
-
-curl -fsSL --progress-bar "${RELEASE_URL}" -o "${TMP}/azuresphere-vma.tar.gz" \
-  || { echo "  ✗ Failed to download release from ${RELEASE_URL}"; exit 1; }
-
-echo "  Extracting..."
-tar -xzf "${TMP}/azuresphere-vma.tar.gz" -C "${TMP}" --strip-components=1
-
-# Copy all assets into install dir — preserving exact repo layout
-cp "${TMP}/index.html"              "${INSTALL_DIR}/index.html"
-cp "${TMP}/docker-compose.yml"      "${INSTALL_DIR}/docker-compose.yml"
-mkdir -p "${INSTALL_DIR}/agent"
-cp "${TMP}/agent/agent"             "${INSTALL_DIR}/agent/agent"
-chmod +x "${INSTALL_DIR}/agent/agent"
-mkdir -p "${INSTALL_DIR}/sftp/data"
-echo "  ✓ Assets extracted"
+if [ -d "${INSTALL_DIR}/.git" ]; then
+  echo "  Repo already present — pulling latest main..."
+  git -C "${INSTALL_DIR}" fetch origin
+  git -C "${INSTALL_DIR}" reset --hard origin/main
+else
+  git clone --depth=1 "${REPO}" "${INSTALL_DIR}"
+fi
+echo "  ✓ Repository ready ($(git -C ${INSTALL_DIR} rev-parse --short HEAD))"
 
 # ── [4/6] Directory structure ─────────────────────────────────
 echo ""
@@ -57,30 +46,13 @@ echo "[4/6] Creating directory structure..."
 mkdir -p "${INSTALL_DIR}/nginx/conf"
 mkdir -p "${INSTALL_DIR}/nginx/certs"
 mkdir -p "${INSTALL_DIR}/nginx/html"
+mkdir -p "${INSTALL_DIR}/sftp/data"
 
-# Copy dashboard HTML into nginx serving dir (mirrors deploy.yml step)
+# Dashboard HTML comes directly from the cloned repo
 cp "${INSTALL_DIR}/index.html" "${INSTALL_DIR}/nginx/html/index.html"
 echo "  ✓ nginx/html/index.html"
 
-# ── [5/6] SSL certificate ─────────────────────────────────────
-echo ""
-echo "[5/6] Generating SSL certificate..."
-
-if [ ! -f "${INSTALL_DIR}/nginx/certs/server.crt" ]; then
-  VMHOSTNAME=$(hostname -f 2>/dev/null || hostname)
-  openssl req -x509 -nodes -days 825 \
-    -newkey rsa:2048 \
-    -keyout "${INSTALL_DIR}/nginx/certs/server.key" \
-    -out    "${INSTALL_DIR}/nginx/certs/server.crt" \
-    -subj   "/CN=azuresphere-vm/O=AzureSphere/OU=DiagnosticAgent" \
-    -addext "subjectAltName=DNS:localhost,DNS:${VMHOSTNAME},IP:127.0.0.1" \
-    2>/dev/null
-  echo "  ✓ Certificate generated for ${VMHOSTNAME}"
-else
-  echo "  ✓ Existing certificate found — skipping"
-fi
-
-# Write nginx config (mirrors deploy.yml step exactly)
+# Write nginx config inline (not stored in repo root, generated at deploy time)
 cat > "${INSTALL_DIR}/nginx/conf/default.conf" << 'NGINXEOF'
 server {
     listen 443 ssl;
@@ -123,28 +95,37 @@ server {
 NGINXEOF
 echo "  ✓ nginx/conf/default.conf"
 
-# ── [6/6] Start containers ────────────────────────────────────
+# ── [5/6] SSL certificate ─────────────────────────────────────
 echo ""
-echo "[6/6] Starting containers..."
+echo "[5/6] Generating SSL certificate..."
+
+if [ ! -f "${INSTALL_DIR}/nginx/certs/server.crt" ]; then
+  VMHOSTNAME=$(hostname -f 2>/dev/null || hostname)
+  openssl req -x509 -nodes -days 825 \
+    -newkey rsa:2048 \
+    -keyout "${INSTALL_DIR}/nginx/certs/server.key" \
+    -out    "${INSTALL_DIR}/nginx/certs/server.crt" \
+    -subj   "/CN=azuresphere-vm/O=AzureSphere/OU=DiagnosticAgent" \
+    -addext "subjectAltName=DNS:localhost,DNS:${VMHOSTNAME},IP:127.0.0.1" \
+    2>/dev/null
+  echo "  ✓ Certificate generated for ${VMHOSTNAME}"
+else
+  echo "  ✓ Existing certificate found — skipping"
+fi
+
+# ── [6/6] Build & start containers ───────────────────────────
+echo ""
+echo "[6/6] Building agent from source and starting containers..."
 cd "${INSTALL_DIR}"
 
-# Override docker-compose agent service to use pre-built binary
-# instead of building from source — all other services unchanged
-# FIX: removed 'build: ~' (null is invalid); omitting build key causes
-# Docker Compose to use the image: value instead, which is correct behaviour
-cat > "${INSTALL_DIR}/docker-compose.override.yml" << OVERRIDEEOF
-services:
-  agent:
-    image: alpine:3.19
-    entrypoint: ["/app/agent"]
-    volumes:
-      - ${INSTALL_DIR}/agent/agent:/app/agent:ro
-OVERRIDEEOF
-
-sudo docker-compose pull --quiet 2>/dev/null || true
+# agent service uses 'build: ./agent' in docker-compose.yml
+# Docker builds it fresh from the cloned Go source — no pre-built binary needed
+# No docker-compose.override.yml required
+sudo docker-compose build --no-cache agent
+sudo docker-compose pull --quiet https-server sftp-server 2>/dev/null || true
 sudo docker-compose up -d
 
-# Wait for nginx then reload (mirrors deploy.yml logic exactly)
+# Wait for nginx then reload
 echo ""
 echo "  Waiting for nginx to be ready..."
 for i in $(seq 1 15); do
@@ -172,6 +153,6 @@ echo "  Active containers:"
 sudo docker-compose ps
 echo ""
 echo "  Troubleshooting:"
-echo "  sudo docker-compose -f ${INSTALL_DIR}/docker-compose.yml logs agent"
+echo "  sudo docker-compose logs agent"
 echo "  curl http://localhost:8080/api/info"
 echo ""
