@@ -131,29 +131,17 @@ AzureSphere/
 - SSH key pair for each VM
 - Azure NSG inbound rules — see Port Reference below
 
-### VM A — Source Host
+### Launch Sequence
 
 ```bash
 git clone https://github.com/HashimsGitHub/AzureSphere.git
 cd AzureSphere
 chmod +x start.sh
-# Select VM A option
+# Select VM A (Source) or VM B (Destination)
 ./start.sh
 ```
 
-**Open:** `https://[VM-A-IP]`
-
-### VM B — Destination Host
-
-```bash
-git clone https://github.com/HashimsGitHub/AzureSphere.git
-cd AzureSphere
-chmod +x start.sh
-# Select VM B Option
-./start.sh
-```
-
-**Open:** `https://[VM-B-IP]`
+**Open:** `https://[VM-IP]`
 
 ---
 
