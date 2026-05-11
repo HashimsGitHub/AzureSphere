@@ -453,6 +453,7 @@ body::before {
   <button class="tab" onclick="switchTab('dns')">DNS</button>
   <button class="tab" onclick="switchTab('log')">Test Log</button>
   <button class="tab" onclick="switchTab('as2')">AS2 Exchange</button>
+  <button class="tab" onclick="switchTab('btp')">SAP BTP</button>
 </div>
 
 <!-- ══════════════════════════════════════════════ -->
@@ -482,6 +483,7 @@ body::before {
         <button class="proto-btn" data-proto="RabbitMQ" onclick="selectProto(this)">RabbitMQ</button>
         <button class="proto-btn" data-proto="SMB" onclick="selectProto(this)">SMB</button>
         <button class="proto-btn" data-proto="HANA" onclick="selectProto(this)">SAP HANA</button>
+        <button class="proto-btn" data-proto="BTP" onclick="selectProto(this)">SAP BTP</button>
         <button class="proto-btn" data-proto="TCP" onclick="selectProto(this)">TCP</button>
       </div>
 
@@ -772,6 +774,94 @@ IEA*1*000000001~</textarea>
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════ -->
+<!--  TAB: SAP BTP                                 -->
+<!-- ══════════════════════════════════════════════ -->
+<div id="tab-btp" class="tab-content">
+  <div class="main-grid">
+
+    <!-- LEFT: BTP Connectivity Tests -->
+    <div class="panel">
+      <div class="panel-title"><i class="fas fa-cloud"></i> SAP BTP Connectivity Test</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">
+        Test connectivity to SAP Business Technology Platform services on VM B.
+      </div>
+
+      <div class="section-label">VM B Target (IP or FQDN)</div>
+      <input class="inp" id="btp-host" placeholder="VM B IP or hostname" type="text" />
+
+      <div class="section-label" style="margin-top:12px">Service to Test</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px" id="btp-service-btns">
+        <button class="proto-btn active" data-btp-port="8080" data-btp-label="Integration Suite" onclick="selectBTPService(this)">Integration Suite :8080</button>
+        <button class="proto-btn" data-btp-port="5671" data-btp-label="Event Mesh (AMQP)" onclick="selectBTPService(this)">Event Mesh :5671</button>
+        <button class="proto-btn" data-btp-port="443" data-btp-label="CF API / OAuth" onclick="selectBTPService(this)">CF API :443</button>
+        <button class="proto-btn" data-btp-port="30015" data-btp-label="HANA Cloud" onclick="selectBTPService(this)">HANA Cloud :30015</button>
+      </div>
+
+      <button class="btn-run" id="btn-btp-test" onclick="runBTPTest()">
+        <i class="fas fa-satellite-dish"></i>&nbsp; Test BTP Connectivity
+      </button>
+    </div>
+
+    <!-- RIGHT: BTP Results -->
+    <div class="panel">
+      <div class="panel-title"><i class="fas fa-chart-bar"></i> BTP Service Status</div>
+
+      <!-- Summary cards -->
+      <div id="btp-cards" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div class="metric-card" id="btpcard-integration">
+          <div class="metric-label">Integration Suite</div>
+          <div class="metric-value" id="btpv-integration" style="font-size:18px">—</div>
+          <div class="metric-sub" id="btps-integration">port 8080</div>
+        </div>
+        <div class="metric-card" id="btpcard-eventmesh">
+          <div class="metric-label">Event Mesh</div>
+          <div class="metric-value" id="btpv-eventmesh" style="font-size:18px">—</div>
+          <div class="metric-sub" id="btps-eventmesh">port 5671</div>
+        </div>
+        <div class="metric-card" id="btpcard-cfapi">
+          <div class="metric-label">CF API / OAuth</div>
+          <div class="metric-value" id="btpv-cfapi" style="font-size:18px">—</div>
+          <div class="metric-sub" id="btps-cfapi">port 443</div>
+        </div>
+        <div class="metric-card" id="btpcard-hanacloud">
+          <div class="metric-label">HANA Cloud</div>
+          <div class="metric-value" id="btpv-hanacloud" style="font-size:18px">—</div>
+          <div class="metric-sub" id="btps-hanacloud">port 30015</div>
+        </div>
+      </div>
+
+      <!-- Detail output -->
+      <div id="btp-result-placeholder" style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px">
+        <i class="fas fa-cloud" style="font-size:28px;margin-bottom:10px;display:block;opacity:0.2"></i>
+        Run a test to see BTP connectivity details
+      </div>
+      <div id="btp-result-detail" style="display:none">
+        <div class="section-label">Last Test Result</div>
+        <div class="kv-list" id="btp-kv"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BTP Architecture reference -->
+  <div class="panel" style="margin-top:16px">
+    <div class="panel-title"><i class="fas fa-sitemap"></i> SAP BTP Port Reference</div>
+    <table class="log-table">
+      <thead><tr>
+        <th>Service</th><th>Port</th><th>Protocol</th><th>Description</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Integration Suite (iFlow)</td><td>8080</td><td>HTTP/BTP</td><td>SAP BTP Integration Suite — OData, REST, SOAP iFlows</td></tr>
+        <tr><td>Event Mesh</td><td>5671</td><td>AMQP/TLS</td><td>SAP Event Mesh — AMQP over TLS messaging</td></tr>
+        <tr><td>Cloud Foundry API / OAuth</td><td>443</td><td>HTTPS</td><td>CF API endpoint, XSUAA OAuth token service</td></tr>
+        <tr><td>HANA Cloud</td><td>30015</td><td>HANA SQL</td><td>SAP HANA Cloud — SQL port (same as on-prem HANA)</td></tr>
+        <tr><td>Cloud Connector (SCC)</td><td>8443</td><td>HTTPS Tunnel</td><td>SAP Cloud Connector reverse tunnel to on-prem</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <!-- FOOTER -->
 <div class="footer">
   <div>© 2026 AzureSphere · Digital Twin · Enterprise Connectivity Diagnostic</div>
@@ -822,7 +912,7 @@ document.getElementById('vm-hostname').textContent =
 // ══════════════════════════════════════════════
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    const tabs = ['connectivity','tls','dns','log','as2'];
+    const tabs = ['connectivity','tls','dns','log','as2','btp'];
     t.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1815,7 +1905,101 @@ document.addEventListener('DOMContentLoaded', () => {
     mainHost.addEventListener('input', () => { if (!as2Host.value) as2Host.value = mainHost.value; });
     as2Host.addEventListener('input', () => { if (!mainHost.value) mainHost.value = as2Host.value; });
   }
+  // Sync host to BTP tab as well
+  const btpHost = document.getElementById('btp-host');
+  if (mainHost && btpHost) {
+    mainHost.addEventListener('input', () => { if (!btpHost.value) btpHost.value = mainHost.value; });
+    btpHost.addEventListener('input', () => { if (!mainHost.value) mainHost.value = btpHost.value; });
+  }
 });
+
+// ── SAP BTP Tab ───────────────────────────────────────────────────────────────
+
+let selectedBTPPort = 8080;
+let selectedBTPLabel = 'Integration Suite';
+
+function selectBTPService(btn) {
+  document.querySelectorAll('#btp-service-btns .proto-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedBTPPort  = parseInt(btn.dataset.btpPort);
+  selectedBTPLabel = btn.dataset.btpLabel;
+}
+
+const btpCardMap = {
+  8080:  { id: 'integration', label: 'Integration Suite' },
+  5671:  { id: 'eventmesh',   label: 'Event Mesh'        },
+  443:   { id: 'cfapi',       label: 'CF API / OAuth'    },
+  30015: { id: 'hanacloud',   label: 'HANA Cloud'        },
+};
+
+function setBTPCard(port, status, latency) {
+  const card = btpCardMap[port];
+  if (!card) return;
+  const valEl = document.getElementById('btpv-' + card.id);
+  const subEl = document.getElementById('btps-' + card.id);
+  if (!valEl) return;
+  const ok = status === 'reachable';
+  valEl.textContent = ok ? '✓' : '✗';
+  valEl.style.color = ok ? 'var(--cyan)' : 'var(--red)';
+  subEl.textContent = ok ? `${latency}ms` : 'unreachable';
+}
+
+async function runBTPTest() {
+  const host = document.getElementById('btp-host').value.trim();
+  if (!host) { alert('Enter VM B host or IP'); return; }
+
+  const btn = document.getElementById('btn-btp-test');
+  btn.disabled = true;
+  btn.classList.add('running');
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>&nbsp; Testing…';
+
+  const agentBase = `https://${window.location.hostname}`;
+  const port = selectedBTPPort;
+  const label = selectedBTPLabel;
+  const start = Date.now();
+
+  try {
+    const res = await fetch(`${agentBase}/api/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host, port, protocol: 'BTP' })
+    });
+    const data = await res.json();
+    const latency = Date.now() - start;
+    const ok = data.success || data.status === 'open' || data.reachable === true;
+
+    setBTPCard(port, ok ? 'reachable' : 'unreachable', latency);
+
+    // Show detail
+    document.getElementById('btp-result-placeholder').style.display = 'none';
+    document.getElementById('btp-result-detail').style.display = 'block';
+    const kvEl = document.getElementById('btp-kv');
+    kvEl.innerHTML = `
+      <div class="kv"><span class="k">Service</span><span class="v">${label}</span></div>
+      <div class="kv"><span class="k">Host</span><span class="v">${host}</span></div>
+      <div class="kv"><span class="k">Port</span><span class="v">${port}</span></div>
+      <div class="kv"><span class="k">Status</span><span class="v" style="color:${ok?'var(--cyan)':'var(--red)'}; font-weight:600">${ok ? 'Reachable ✓' : 'Unreachable ✗'}</span></div>
+      <div class="kv"><span class="k">Latency</span><span class="v">${latency} ms</span></div>
+      <div class="kv"><span class="k">Tested At</span><span class="v">${new Date().toISOString()}</span></div>
+      ${data.banner ? `<div class="kv"><span class="k">Banner</span><span class="v" style="font-size:11px;font-family:var(--mono)">${data.banner}</span></div>` : ''}
+    `;
+  } catch(e) {
+    setBTPCard(port, 'unreachable', 0);
+    document.getElementById('btp-result-placeholder').style.display = 'none';
+    document.getElementById('btp-result-detail').style.display = 'block';
+    document.getElementById('btp-kv').innerHTML = `
+      <div class="kv"><span class="k">Service</span><span class="v">${label}</span></div>
+      <div class="kv"><span class="k">Host</span><span class="v">${host}</span></div>
+      <div class="kv"><span class="k">Port</span><span class="v">${port}</span></div>
+      <div class="kv"><span class="k">Status</span><span class="v" style="color:var(--red);font-weight:600">Error ✗</span></div>
+      <div class="kv"><span class="k">Error</span><span class="v" style="font-size:11px">${e.message}</span></div>
+    `;
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('running');
+    btn.innerHTML = '<i class="fas fa-satellite-dish"></i>&nbsp; Test BTP Connectivity';
+  }
+}
 
 </script>
 </body>
