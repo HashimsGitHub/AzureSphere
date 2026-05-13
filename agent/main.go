@@ -582,6 +582,229 @@ func handleHTTP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// ─── Traceroute types ─────────────────────────────────────────────────────────
+
+type TracerouteHop struct {
+	Hop      int      `json:"hop"`
+	IP       string   `json:"ip"`
+	Hostname string   `json:"hostname,omitempty"`
+	RTTs     []float64 `json:"rtts"`
+	AvgRTT   float64  `json:"avg_rtt"`
+	Timeout  bool     `json:"timeout"`
+	ASN      string   `json:"asn,omitempty"`
+	ISP      string   `json:"isp,omitempty"`
+	Country  string   `json:"country,omitempty"`
+	City     string   `json:"city,omitempty"`
+	IsAzure  bool     `json:"is_azure"`
+	IsPrivate bool    `json:"is_private"`
+}
+
+type TracerouteResult struct {
+	Host      string          `json:"host"`
+	Hops      []TracerouteHop `json:"hops"`
+	Reached   bool            `json:"reached"`
+	TotalHops int             `json:"total_hops"`
+	Error     string          `json:"error,omitempty"`
+	Timestamp string          `json:"timestamp"`
+}
+
+// GET /api/test/traceroute?host=x
+func handleTraceroute(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	host, _, err := parseRequest(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, TracerouteResult{Error: err.Error(), Timestamp: now()})
+		return
+	}
+
+	result := TracerouteResult{Host: host, Timestamp: now()}
+
+	// Run traceroute — try traceroute first, fall back to tracepath
+	var out []byte
+	out, err = exec.Command("traceroute", "-n", "-q", "2", "-w", "2", "-m", "30", host).Output()
+	if err != nil {
+		out, err = exec.Command("tracepath", "-n", "-m", "30", host).Output()
+		if err != nil {
+			result.Error = "traceroute/tracepath not available: " + err.Error()
+			writeJSON(w, http.StatusOK, result)
+			return
+		}
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		// Parse hop number
+		hopNum := 0
+		fmt.Sscanf(fields[0], "%d", &hopNum)
+		if hopNum == 0 {
+			continue
+		}
+
+		hop := TracerouteHop{Hop: hopNum, Timeout: true}
+
+		// Check for timeout (* * *)
+		timeouts := 0
+		for _, f := range fields[1:] {
+			if f == "*" {
+				timeouts++
+			}
+		}
+		if timeouts == len(fields)-1 {
+			hop.Timeout = true
+			result.Hops = append(result.Hops, hop)
+			continue
+		}
+
+		// Extract IP
+		for _, f := range fields[1:] {
+			if net.ParseIP(f) != nil {
+				hop.IP = f
+				break
+			}
+		}
+		if hop.IP == "" {
+			continue
+		}
+		hop.Timeout = false
+
+		// Extract RTTs (ms values)
+		for _, f := range fields {
+			if strings.HasSuffix(f, "ms") {
+				f = strings.TrimSuffix(f, "ms")
+			}
+			var v float64
+			if _, e := fmt.Sscanf(f, "%f", &v); e == nil && v > 0 && v < 30000 {
+				hop.RTTs = append(hop.RTTs, math.Round(v*100)/100)
+			}
+		}
+		if len(hop.RTTs) > 0 {
+			sum := 0.0
+			for _, v := range hop.RTTs {
+				sum += v
+			}
+			hop.AvgRTT = math.Round(sum/float64(len(hop.RTTs))*100) / 100
+		}
+
+		// Classify IP
+		hop.IsPrivate = isPrivateIP(hop.IP)
+		hop.IsAzure = isAzureIP(hop.IP)
+
+		// Async ISP/geo lookup via ip-api.com (free, no key needed)
+		if !hop.IsPrivate && hop.IP != "" {
+			if geo := lookupGeo(hop.IP); geo != nil {
+				hop.ASN = geo.ASN
+				hop.ISP = geo.ISP
+				hop.Country = geo.Country
+				hop.City = geo.City
+			}
+		}
+
+		// Reverse DNS
+		if names, e := net.LookupAddr(hop.IP); e == nil && len(names) > 0 {
+			hop.Hostname = strings.TrimSuffix(names[0], ".")
+		}
+
+		if hop.IP == host || hop.Hostname == host {
+			result.Reached = true
+		}
+
+		result.Hops = append(result.Hops, hop)
+	}
+
+	result.TotalHops = len(result.Hops)
+
+	// Check if last non-timeout hop reached the destination
+	if !result.Reached && len(result.Hops) > 0 {
+		last := result.Hops[len(result.Hops)-1]
+		if last.IP == host {
+			result.Reached = true
+		}
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+type geoInfo struct {
+	ASN     string
+	ISP     string
+	Country string
+	City    string
+}
+
+func lookupGeo(ip string) *geoInfo {
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://ip-api.com/json/" + ip + "?fields=status,country,city,isp,as")
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	var data struct {
+		Status  string `json:"status"`
+		Country string `json:"country"`
+		City    string `json:"city"`
+		ISP     string `json:"isp"`
+		AS      string `json:"as"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil
+	}
+	if data.Status != "success" {
+		return nil
+	}
+	return &geoInfo{ASN: data.AS, ISP: data.ISP, Country: data.Country, City: data.City}
+}
+
+func isPrivateIP(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	privateRanges := []string{
+		"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+		"127.0.0.0/8", "169.254.0.0/16", "::1/128", "fc00::/7",
+	}
+	for _, cidr := range privateRanges {
+		_, network, err := net.ParseCIDR(cidr)
+		if err == nil && network.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAzureIP(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	// Azure public IP ranges (major blocks)
+	azureRanges := []string{
+		"13.64.0.0/11", "13.96.0.0/13", "13.104.0.0/14",
+		"20.0.0.0/8",   "23.96.0.0/13", "40.64.0.0/10",
+		"51.0.0.0/9",   "52.0.0.0/8",   "65.52.0.0/14",
+		"70.37.0.0/17", "104.40.0.0/13","137.116.0.0/15",
+		"157.55.0.0/16","168.61.0.0/16","191.232.0.0/13",
+	}
+	for _, cidr := range azureRanges {
+		_, network, err := net.ParseCIDR(cidr)
+		if err == nil && network.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
 // POST /api/test/ping   ?host=x
 func handlePing(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
@@ -776,11 +999,12 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/info",       handleInfo)
-	mux.HandleFunc("/api/test/tcp",   handleTCP)
-	mux.HandleFunc("/api/test/dns",   handleDNS)
-	mux.HandleFunc("/api/test/tls",   handleTLS)
-	mux.HandleFunc("/api/test/http",  handleHTTP)
-	mux.HandleFunc("/api/test/ping",  handlePing)
+	mux.HandleFunc("/api/test/tcp",        handleTCP)
+	mux.HandleFunc("/api/test/dns",        handleDNS)
+	mux.HandleFunc("/api/test/tls",        handleTLS)
+	mux.HandleFunc("/api/test/http",       handleHTTP)
+	mux.HandleFunc("/api/test/ping",       handlePing)
+	mux.HandleFunc("/api/test/traceroute", handleTraceroute)
 	mux.HandleFunc("/api/as2/send",      handleAS2Send)
 	mux.HandleFunc("/api/vmb/messages",  handleVMBMessages)
 	mux.HandleFunc("/api/vmb/clear",     handleVMBClear)
