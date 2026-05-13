@@ -705,7 +705,7 @@ body::before {
       <span id="drawer-log-count" style="font-size:11px;color:var(--text-muted)"></span>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn-sm" onclick="exportLog()"><i class="fas fa-download"></i> Export JSON</button>
+      <button class="btn-sm" onclick="exportLog()"><i class="fas fa-download"></i> Export CSV</button>
       <button class="btn-sm danger" onclick="clearLog()"><i class="fas fa-trash"></i> Clear</button>
       <button onclick="closeLogDrawer()" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:4px 8px;line-height:1">&times;</button>
     </div>
@@ -1852,9 +1852,17 @@ function renderLog() {
 }
 
 function exportLog() {
-  const blob = new Blob([JSON.stringify(testLog, null, 2)], {type:'application/json'});
+  const headers = ['Timestamp','Type','Target','Port','Protocol','Result','Latency(ms)','Detail'];
+  const rows = testLog.map(r => [
+    new Date(r.ts).toLocaleString(),
+    r.type, r.host, r.port, r.proto, r.result,
+    r.latency || '',
+    `"${(r.detail || '').replace(/"/g, '""')}"`
+  ].join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = `azuresphere-log-${Date.now()}.json`; a.click();
+  a.download = `azuresphere-log-${Date.now()}.csv`; a.click();
 }
 
 function clearLog() {
