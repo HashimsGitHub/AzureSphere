@@ -92,6 +92,25 @@ server {
         if ($request_method = OPTIONS) { return 204; }
     }
 
+    # SSE endpoint for UberRoute — requires buffering disabled and long timeout
+    location /api/test/traceroute {
+        proxy_pass         http://host.docker.internal:8080/api/test/traceroute;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Connection        '';
+        proxy_read_timeout 120s;
+        proxy_buffering    off;
+        proxy_cache        off;
+        chunked_transfer_encoding on;
+        add_header Access-Control-Allow-Origin  * always;
+        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Content-Type" always;
+        add_header X-Accel-Buffering no;
+    }
+
     location /health {
         proxy_pass http://host.docker.internal:8080/health;
     }
