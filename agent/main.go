@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"crypto/tls"
 	"crypto/sha1"
 	"encoding/base64"
@@ -18,6 +17,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -612,163 +612,160 @@ type TracerouteResult struct {
 	Timestamp string          `json:"timestamp"`
 }
 
-// GET /api/test/traceroute?host=x  — Server-Sent Events, streams hops in real time
-func handleTraceroute(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodOptions {
-		writeJSON(w, http.StatusOK, nil)
-		return
+// ── Traceroute job store (polling approach) ──────────────────────────────────
+
+type TraceJob struct {
+	Hops    []TracerouteHop
+	Done    bool
+	Reached bool
+	Error   string
+}
+
+var (
+	traceJobs   = map[string]*TraceJob{}
+	traceJobsMu sync.Mutex
+)
+
+func parseTraceLine(line string) *TracerouteHop {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return nil
 	}
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return nil
+	}
+	hopNum := 0
+	fmt.Sscanf(fields[0], "%d", &hopNum)
+	if hopNum == 0 {
+		return nil
+	}
+	hop := &TracerouteHop{Hop: hopNum, Timeout: true}
+	timeouts := 0
+	for _, f := range fields[1:] {
+		if f == "*" {
+			timeouts++
+		}
+	}
+	if timeouts == len(fields)-1 {
+		return hop
+	}
+	for _, f := range fields[1:] {
+		if net.ParseIP(f) != nil {
+			hop.IP = f
+			break
+		}
+	}
+	if hop.IP == "" {
+		return nil
+	}
+	hop.Timeout = false
+	for _, f := range fields {
+		f = strings.TrimSuffix(f, "ms")
+		var v float64
+		if _, e := fmt.Sscanf(f, "%f", &v); e == nil && v > 0 && v < 30000 {
+			hop.RTTs = append(hop.RTTs, math.Round(v*100)/100)
+		}
+	}
+	if len(hop.RTTs) > 0 {
+		sum := 0.0
+		for _, v := range hop.RTTs {
+			sum += v
+		}
+		hop.AvgRTT = math.Round(sum/float64(len(hop.RTTs))*100) / 100
+	}
+	hop.IsPrivate = isPrivateIP(hop.IP)
+	hop.IsAzure = isAzureIP(hop.IP)
+	if !hop.IsPrivate {
+		if geo := lookupGeo(hop.IP); geo != nil {
+			hop.ASN = geo.ASN
+			hop.ISP = geo.ISP
+			hop.Country = geo.Country
+			hop.City = geo.City
+		}
+	}
+	if names, e := net.LookupAddr(hop.IP); e == nil && len(names) > 0 {
+		hop.Hostname = strings.TrimSuffix(names[0], ".")
+	}
+	return hop
+}
+
+// POST /api/test/traceroute/start?host=x  — starts job, returns job ID
+func handleTracerouteStart(w http.ResponseWriter, r *http.Request) {
 	host, _, err := parseRequest(r)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	jobID := fmt.Sprintf("%d", time.Now().UnixNano())
+	job := &TraceJob{}
+	traceJobsMu.Lock()
+	traceJobs[jobID] = job
+	traceJobsMu.Unlock()
 
-	// Set SSE headers
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
-		return
-	}
-
-	sendEvent := func(eventType string, data interface{}) {
-		b, _ := json.Marshal(data)
-		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, string(b))
-		flusher.Flush()
-	}
-
-	parseHop := func(line string) *TracerouteHop {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			return nil
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			return nil
-		}
-		hopNum := 0
-		fmt.Sscanf(fields[0], "%d", &hopNum)
-		if hopNum == 0 {
-			return nil
-		}
-		hop := &TracerouteHop{Hop: hopNum, Timeout: true}
-
-		// Timeout check
-		timeouts := 0
-		for _, f := range fields[1:] {
-			if f == "*" {
-				timeouts++
+	go func() {
+		out, err := exec.Command("traceroute", "-n", "-q", "2", "-w", "2", "-m", "30", host).Output()
+		if err != nil {
+			out, err = exec.Command("tracepath", "-n", "-m", "30", host).Output()
+			if err != nil {
+				traceJobsMu.Lock()
+				job.Error = "traceroute not available: " + err.Error()
+				job.Done = true
+				traceJobsMu.Unlock()
+				return
 			}
 		}
-		if timeouts == len(fields)-1 {
-			return hop
-		}
-
-		// Extract IP
-		for _, f := range fields[1:] {
-			if net.ParseIP(f) != nil {
-				hop.IP = f
-				break
+		for _, line := range strings.Split(string(out), "
+") {
+			if h := parseTraceLine(line); h != nil {
+				traceJobsMu.Lock()
+				job.Hops = append(job.Hops, *h)
+				traceJobsMu.Unlock()
 			}
 		}
-		if hop.IP == "" {
-			return nil
+		traceJobsMu.Lock()
+		if len(job.Hops) > 0 {
+			last := job.Hops[len(job.Hops)-1]
+			job.Reached = !last.Timeout && (last.IP == host || strings.Contains(last.Hostname, host))
 		}
-		hop.Timeout = false
+		job.Done = true
+		traceJobsMu.Unlock()
+	}()
 
-		// Extract RTTs
-		for _, f := range fields {
-			f = strings.TrimSuffix(f, "ms")
-			var v float64
-			if _, e := fmt.Sscanf(f, "%f", &v); e == nil && v > 0 && v < 30000 {
-				hop.RTTs = append(hop.RTTs, math.Round(v*100)/100)
-			}
-		}
-		if len(hop.RTTs) > 0 {
-			sum := 0.0
-			for _, v := range hop.RTTs {
-				sum += v
-			}
-			hop.AvgRTT = math.Round(sum/float64(len(hop.RTTs))*100) / 100
-		}
-
-		hop.IsPrivate = isPrivateIP(hop.IP)
-		hop.IsAzure = isAzureIP(hop.IP)
-
-		if !hop.IsPrivate {
-			if geo := lookupGeo(hop.IP); geo != nil {
-				hop.ASN = geo.ASN
-				hop.ISP = geo.ISP
-				hop.Country = geo.Country
-				hop.City = geo.City
-			}
-		}
-		if names, e := net.LookupAddr(hop.IP); e == nil && len(names) > 0 {
-			hop.Hostname = strings.TrimSuffix(names[0], ".")
-		}
-		return hop
-	}
-
-	// Start traceroute process and stream stdout line by line
-	cmd := exec.Command("traceroute", "-n", "-q", "2", "-w", "2", "-m", "30", host)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		sendEvent("error", map[string]string{"error": err.Error()})
-		return
-	}
-	if err := cmd.Start(); err != nil {
-		// Fall back to tracepath
-		cmd2 := exec.Command("tracepath", "-n", "-m", "30", host)
-		out, err2 := cmd2.Output()
-		if err2 != nil {
-			sendEvent("error", map[string]string{"error": "traceroute/tracepath not available: " + err2.Error()})
-			return
-		}
-		// Parse tracepath output all at once
-		hops := []TracerouteHop{}
-		for _, line := range strings.Split(string(out), "\n") {
-			if h := parseHop(line); h != nil {
-				hops = append(hops, *h)
-				sendEvent("hop", h)
-			}
-		}
-		reached := len(hops) > 0 && !hops[len(hops)-1].Timeout
-		sendEvent("done", map[string]interface{}{
-			"total_hops": len(hops),
-			"reached":    reached,
-			"host":       host,
-		})
-		return
-	}
-
-	// Stream stdout line by line
-	hops := []TracerouteHop{}
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if h := parseHop(line); h != nil {
-			hops = append(hops, *h)
-			sendEvent("hop", h)
-		}
-	}
-	cmd.Wait()
-
-	reached := false
-	if len(hops) > 0 {
-		last := hops[len(hops)-1]
-		reached = !last.Timeout && (last.IP == host || last.Hostname == host)
-	}
-	sendEvent("done", map[string]interface{}{
-		"total_hops": len(hops),
-		"reached":    reached,
-		"host":       host,
-	})
+	writeJSON(w, http.StatusOK, map[string]string{"job_id": jobID})
 }
 
+// GET /api/test/traceroute/poll?job_id=x  — returns current hops + done status
+func handleTraceroutePoll(w http.ResponseWriter, r *http.Request) {
+	jobID := r.URL.Query().Get("job_id")
+	traceJobsMu.Lock()
+	job, ok := traceJobs[jobID]
+	traceJobsMu.Unlock()
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "job not found"})
+		return
+	}
+	traceJobsMu.Lock()
+	hops := make([]TracerouteHop, len(job.Hops))
+	copy(hops, job.Hops)
+	done := job.Done
+	reached := job.Reached
+	jobErr := job.Error
+	traceJobsMu.Unlock()
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"hops":    hops,
+		"done":    done,
+		"reached": reached,
+		"error":   jobErr,
+	})
+	// Clean up finished jobs
+	if done {
+		traceJobsMu.Lock()
+		delete(traceJobs, jobID)
+		traceJobsMu.Unlock()
+	}
+}
 type geoInfo struct {
 	ASN     string
 	ISP     string
@@ -1015,12 +1012,13 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/info",       handleInfo)
-	mux.HandleFunc("/api/test/tcp",        handleTCP)
-	mux.HandleFunc("/api/test/dns",        handleDNS)
-	mux.HandleFunc("/api/test/tls",        handleTLS)
-	mux.HandleFunc("/api/test/http",       handleHTTP)
-	mux.HandleFunc("/api/test/ping",       handlePing)
-	mux.HandleFunc("/api/test/traceroute", handleTraceroute)
+	mux.HandleFunc("/api/test/tcp",                handleTCP)
+	mux.HandleFunc("/api/test/dns",                handleDNS)
+	mux.HandleFunc("/api/test/tls",                handleTLS)
+	mux.HandleFunc("/api/test/http",               handleHTTP)
+	mux.HandleFunc("/api/test/ping",               handlePing)
+	mux.HandleFunc("/api/test/traceroute/start",   handleTracerouteStart)
+	mux.HandleFunc("/api/test/traceroute/poll",    handleTraceroutePoll)
 	mux.HandleFunc("/api/as2/send",      handleAS2Send)
 	mux.HandleFunc("/api/vmb/messages",  handleVMBMessages)
 	mux.HandleFunc("/api/vmb/clear",     handleVMBClear)
