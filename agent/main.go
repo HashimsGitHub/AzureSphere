@@ -715,8 +715,7 @@ func handleTracerouteStart(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		for _, line := range strings.Split(string(out), "
-") {
+		for _, line := range strings.Split(string(out), "\n") {
 			if h := parseTraceLine(line); h != nil {
 				traceJobsMu.Lock()
 				job.Hops = append(job.Hops, *h)
