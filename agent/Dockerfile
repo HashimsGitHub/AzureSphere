@@ -6,7 +6,7 @@ COPY main.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o agent .
 
 FROM alpine:3.19
-RUN apk add --no-cache iputils ca-certificates tzdata
+RUN apk add --no-cache iputils ca-certificates tzdata traceroute
 WORKDIR /app
 COPY --from=builder /app/agent .
 EXPOSE 8080
