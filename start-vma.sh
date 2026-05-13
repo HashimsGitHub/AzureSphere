@@ -58,9 +58,9 @@ mkdir -p "${INSTALL_DIR}/nginx/certs"
 mkdir -p "${INSTALL_DIR}/nginx/html"
 mkdir -p "${INSTALL_DIR}/sftp/data"
 
-# Dashboard HTML comes directly from the cloned repo
-cp "${INSTALL_DIR}/index.html" "${INSTALL_DIR}/nginx/html/index.html"
-echo "  ✓ nginx/html/index.html"
+# Always overwrite index.html from the checked-out branch (prevents stale cache from old deploys)
+cp -f "${INSTALL_DIR}/index.html" "${INSTALL_DIR}/nginx/html/index.html"
+echo "  ✓ nginx/html/index.html (branch: ${BRANCH})"
 
 # Write nginx config inline (not stored in repo root, generated at deploy time)
 cat > "${INSTALL_DIR}/nginx/conf/default.conf" << 'NGINXEOF'
