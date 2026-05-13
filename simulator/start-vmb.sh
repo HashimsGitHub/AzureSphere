@@ -12,6 +12,15 @@ REPO="https://github.com/HashimsGitHub/AzureSphere.git"
 INSTALL_DIR="$HOME/AzureSphere/simulator"
 REPO_DIR="$HOME/AzureSphere"
 
+# Optional branch override: bash start-vmb.sh --branch feature/sap-btp
+BRANCH="main"
+for arg in "$@"; do
+  case $arg in
+    --branch=*) BRANCH="${arg#*=}" ;;
+    --branch)   shift; BRANCH="$1" ;;
+  esac
+done
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  AzureSphere — Destination Host (VM B)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -34,13 +43,14 @@ echo ""
 echo "[3/6] Fetching latest source from GitHub..."
 
 if [ -d "${REPO_DIR}/.git" ]; then
-  echo "  Repo already present — pulling latest main..."
+  echo "  Repo already present — pulling branch: ${BRANCH}..."
   git -C "${REPO_DIR}" fetch origin
-  git -C "${REPO_DIR}" reset --hard origin/main
+  git -C "${REPO_DIR}" checkout "${BRANCH}"
+  git -C "${REPO_DIR}" reset --hard "origin/${BRANCH}"
 else
-  git clone --depth=1 "${REPO}" "${REPO_DIR}"
+  git clone --depth=1 --branch "${BRANCH}" "${REPO}" "${REPO_DIR}"
 fi
-echo "  ✓ Repository ready ($(git -C ${REPO_DIR} rev-parse --short HEAD))"
+echo "  ✓ Repository ready — branch: ${BRANCH} ($(git -C ${REPO_DIR} rev-parse --short HEAD))"
 
 # ── [4/6] Directory structure ─────────────────────────────────
 echo ""
@@ -171,6 +181,7 @@ echo "    21    FTP             5672  RabbitMQ"
 echo "    30015 SAP HANA        5555  webMethods IS"
 echo "    8443  HTTPS/TLS       2222  SFTP"
 echo "    8888  Custom TCP      9090  Persona API + AS2"
+echo "    8080  SAP BTP IS      5671  SAP Event Mesh"
 echo ""
 echo "  Active containers:"
 sudo docker-compose ps

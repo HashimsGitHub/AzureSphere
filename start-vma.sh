@@ -10,6 +10,15 @@ set -e
 REPO="https://github.com/HashimsGitHub/AzureSphere.git"
 INSTALL_DIR="$HOME/AzureSphere"
 
+# Optional branch override: bash start-vma.sh --branch feature/sap-btp
+BRANCH="main"
+for arg in "$@"; do
+  case $arg in
+    --branch=*) BRANCH="${arg#*=}" ;;
+    --branch)   shift; BRANCH="$1" ;;
+  esac
+done
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  AzureSphere — Source Host (VM A)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -32,13 +41,14 @@ echo ""
 echo "[3/6] Fetching latest source from GitHub..."
 
 if [ -d "${INSTALL_DIR}/.git" ]; then
-  echo "  Repo already present — pulling latest main..."
+  echo "  Repo already present — pulling branch: ${BRANCH}..."
   git -C "${INSTALL_DIR}" fetch origin
-  git -C "${INSTALL_DIR}" reset --hard origin/main
+  git -C "${INSTALL_DIR}" checkout "${BRANCH}"
+  git -C "${INSTALL_DIR}" reset --hard "origin/${BRANCH}"
 else
-  git clone --depth=1 "${REPO}" "${INSTALL_DIR}"
+  git clone --depth=1 --branch "${BRANCH}" "${REPO}" "${INSTALL_DIR}"
 fi
-echo "  ✓ Repository ready ($(git -C ${INSTALL_DIR} rev-parse --short HEAD))"
+echo "  ✓ Repository ready — branch: ${BRANCH} ($(git -C ${INSTALL_DIR} rev-parse --short HEAD))"
 
 # ── [4/6] Directory structure ─────────────────────────────────
 echo ""
@@ -48,9 +58,9 @@ mkdir -p "${INSTALL_DIR}/nginx/certs"
 mkdir -p "${INSTALL_DIR}/nginx/html"
 mkdir -p "${INSTALL_DIR}/sftp/data"
 
-# Dashboard HTML comes directly from the cloned repo
-cp "${INSTALL_DIR}/index.html" "${INSTALL_DIR}/nginx/html/index.html"
-echo "  ✓ nginx/html/index.html"
+# Always overwrite index.html from the checked-out branch (prevents stale cache from old deploys)
+cp -f "${INSTALL_DIR}/index.html" "${INSTALL_DIR}/nginx/html/index.html"
+echo "  ✓ nginx/html/index.html (branch: ${BRANCH})"
 
 # Write nginx config inline (not stored in repo root, generated at deploy time)
 cat > "${INSTALL_DIR}/nginx/conf/default.conf" << 'NGINXEOF'

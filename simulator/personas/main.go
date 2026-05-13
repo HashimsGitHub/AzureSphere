@@ -180,6 +180,24 @@ func handleWebMethods(conn net.Conn, persona Persona) {
 	conn.Write([]byte(resp))
 }
 
+func handleSAPBTP(conn net.Conn, persona Persona) {
+	defer conn.Close()
+	logConn(persona.Name, persona.Port, "SAP BTP/HTTPS", conn.RemoteAddr().String())
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	buf := make([]byte, 4096)
+	conn.Read(buf)
+	// Mimic SAP BTP Integration Suite HTTP response headers
+	resp := "HTTP/1.1 200 OK\r\n" +
+		"Server: SAP BTP Integration Suite\r\n" +
+		"Content-Type: application/json\r\n" +
+		"X-Powered-By: SAP Business Technology Platform\r\n" +
+		"X-SAP-BTP-Region: cf-ap21\r\n" +
+		"Connection: close\r\n\r\n" +
+		`{"status":"active","service":"SAP BTP Integration Suite","region":"cf-ap21",` +
+		`"version":"1.0","simulator":"AzureSphere","port":` + strconv.Itoa(persona.Port) + `}`
+	conn.Write([]byte(resp))
+}
+
 func handleSMB(conn net.Conn, persona Persona) {
 	defer conn.Close()
 	logConn(persona.Name, persona.Port, "SMB", conn.RemoteAddr().String())
@@ -254,6 +272,8 @@ func startListener(persona Persona) {
 				handleSAPHANA(c, persona)
 			case "WEBMETHODS", "WEBM":
 				handleWebMethods(c, persona)
+			case "BTP", "SAPBTP":
+				handleSAPBTP(c, persona)
 			case "SMB":
 				handleSMB(c, persona)
 			default:
