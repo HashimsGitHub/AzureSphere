@@ -2279,65 +2279,83 @@ async function runUberRoute() {
   document.getElementById('uber-path').innerHTML = '';
   document.getElementById('uber-summary-panel').style.display = 'none';
   document.getElementById('uber-live-badge').style.display = '';
+  document.getElementById('uber-table-panel').style.display = 'none';
   document.getElementById('uber-table-body').innerHTML =
     '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text-muted)"><i class="fas fa-circle-notch fa-spin"></i> Tracing...</td></tr>';
 
-  // Add source node
+  const allHops = [];
+
+  // Add source node immediately
   appendUberNode({
     hop: 0, ip: window.location.hostname, hostname: 'VM A (Source)',
-    rtts: [], avgRTT: 0, timeout: false, isPrivate: true, isAzure: false,
+    rtts: [], avg_rtt: 0, timeout: false, is_private: true, is_azure: false,
     isp: '', asn: '', country: '', city: '', isSource: true
   });
 
-  try {
-    const res = await fetch(`/api/test/traceroute?host=${encodeURIComponent(host)}`);
-    const data = await res.json();
+  const es = new EventSource('/api/test/traceroute?host=' + encodeURIComponent(host));
 
-    if (data.error && (!data.hops || data.hops.length === 0)) {
-      document.getElementById('uber-path').innerHTML +=
-        `<div style="padding:20px;color:var(--red);font-size:12px"><i class="fas fa-exclamation-circle"></i> ${data.error}</div>`;
-      return;
-    }
+  es.addEventListener('hop', function(e) {
+    const hop = JSON.parse(e.data);
+    allHops.push(hop);
+    appendUberNode(hop);
+  });
 
-    // Animate hops one by one
-    for (let i = 0; i < data.hops.length; i++) {
-      await new Promise(r => setTimeout(r, 120));
-      appendUberNode(data.hops[i]);
-    }
+  es.addEventListener('done', function(e) {
+    const summary = JSON.parse(e.data);
+    es.close();
 
-    // Destination node
-    await new Promise(r => setTimeout(r, 180));
     appendUberNode({
-      hop: data.total_hops + 1,
+      hop: summary.total_hops + 1,
       ip: host, hostname: 'Destination',
-      rtts: [], avgRTT: 0, timeout: !data.reached,
-      isPrivate: false, isAzure: false,
-      isp: '', country: '', isDestination: true, reached: data.reached
+      rtts: [], avg_rtt: 0,
+      timeout: !summary.reached,
+      is_private: false, is_azure: false,
+      isp: '', country: '',
+      isDestination: true, reached: summary.reached
     });
 
-    // Render summary + table
-    renderUberSummary(data);
-    renderUberTable(data.hops);
+    renderUberSummary({ hops: allHops, total_hops: summary.total_hops, reached: summary.reached });
+    renderUberTable(allHops);
+
+    const rttHops = allHops.filter(function(h) { return !h.timeout && h.avg_rtt > 0; });
+    const avgRTT = rttHops.length
+      ? (rttHops.reduce(function(s,h) { return s + h.avg_rtt; }, 0) / rttHops.length).toFixed(1)
+      : 0;
 
     addToLog({
-      type: 'UberRoute', host, port: 0, proto: 'ICMP',
-      result: data.reached ? 'pass' : 'fail',
-      latency: data.hops.filter(h => !h.timeout && h.avg_rtt > 0)
-        .reduce((s, h, _, a) => s + h.avg_rtt / a.length, 0).toFixed(1),
-      detail: `${data.total_hops} hops · ${data.hops.filter(h=>h.is_azure).length} Azure · ${data.reached ? 'Destination reached' : 'Destination not reached'}`
+      type: 'UberRoute', host: host, port: 0, proto: 'ICMP',
+      result: summary.reached ? 'pass' : 'fail',
+      latency: avgRTT,
+      detail: summary.total_hops + ' hops · ' + allHops.filter(function(h){return h.is_azure;}).length + ' Azure · ' + (summary.reached ? 'Destination reached' : 'Not reached')
     });
 
-  } catch(e) {
-    document.getElementById('uber-path').innerHTML +=
-      `<div style="padding:20px;color:var(--red);font-size:12px"><i class="fas fa-exclamation-circle"></i> Error: ${e.message}</div>`;
-  } finally {
     uberRunning = false;
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-route"></i>&nbsp; Launch UberRoute';
     document.getElementById('uber-live-badge').style.display = 'none';
-  }
-}
+  });
 
+  es.onerror = function() {
+    es.close();
+    document.getElementById('uber-path').innerHTML +=
+      '<div style="padding:20px;color:var(--red);font-size:12px"><i class="fas fa-exclamation-circle"></i> Traceroute stream error — check agent logs</div>';
+    uberRunning = false;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-route"></i>&nbsp; Launch UberRoute';
+    document.getElementById('uber-live-badge').style.display = 'none';
+  };
+
+  // Safety timeout 90s
+  setTimeout(function() {
+    if (uberRunning) {
+      es.close();
+      uberRunning = false;
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-route"></i>&nbsp; Launch UberRoute';
+      document.getElementById('uber-live-badge').style.display = 'none';
+    }
+  }, 90000);
+}
 function hopColor(avgRTT, timeout) {
   if (timeout)      return 'hop-grey';
   if (avgRTT < 20)  return 'hop-green';

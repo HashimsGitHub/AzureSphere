@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	"crypto/sha1"
 	"encoding/base64"
@@ -611,7 +612,7 @@ type TracerouteResult struct {
 	Timestamp string          `json:"timestamp"`
 }
 
-// GET /api/test/traceroute?host=x
+// GET /api/test/traceroute?host=x  — Server-Sent Events, streams hops in real time
 func handleTraceroute(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		writeJSON(w, http.StatusOK, nil)
@@ -619,44 +620,44 @@ func handleTraceroute(w http.ResponseWriter, r *http.Request) {
 	}
 	host, _, err := parseRequest(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, TracerouteResult{Error: err.Error(), Timestamp: now()})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
-	result := TracerouteResult{Host: host, Timestamp: now()}
-
-	// Run traceroute — try traceroute first, fall back to tracepath
-	var out []byte
-	out, err = exec.Command("traceroute", "-n", "-q", "2", "-w", "2", "-m", "30", host).Output()
-	if err != nil {
-		out, err = exec.Command("tracepath", "-n", "-m", "30", host).Output()
-		if err != nil {
-			result.Error = "traceroute/tracepath not available: " + err.Error()
-			writeJSON(w, http.StatusOK, result)
-			return
-		}
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	for _, line := range lines {
+	sendEvent := func(eventType string, data interface{}) {
+		b, _ := json.Marshal(data)
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, string(b))
+		flusher.Flush()
+	}
+
+	parseHop := func(line string) *TracerouteHop {
 		line = strings.TrimSpace(line)
 		if line == "" {
-			continue
+			return nil
 		}
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
-			continue
+			return nil
 		}
-		// Parse hop number
 		hopNum := 0
 		fmt.Sscanf(fields[0], "%d", &hopNum)
 		if hopNum == 0 {
-			continue
+			return nil
 		}
+		hop := &TracerouteHop{Hop: hopNum, Timeout: true}
 
-		hop := TracerouteHop{Hop: hopNum, Timeout: true}
-
-		// Check for timeout (* * *)
+		// Timeout check
 		timeouts := 0
 		for _, f := range fields[1:] {
 			if f == "*" {
@@ -664,9 +665,7 @@ func handleTraceroute(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if timeouts == len(fields)-1 {
-			hop.Timeout = true
-			result.Hops = append(result.Hops, hop)
-			continue
+			return hop
 		}
 
 		// Extract IP
@@ -677,15 +676,13 @@ func handleTraceroute(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if hop.IP == "" {
-			continue
+			return nil
 		}
 		hop.Timeout = false
 
-		// Extract RTTs (ms values)
+		// Extract RTTs
 		for _, f := range fields {
-			if strings.HasSuffix(f, "ms") {
-				f = strings.TrimSuffix(f, "ms")
-			}
+			f = strings.TrimSuffix(f, "ms")
 			var v float64
 			if _, e := fmt.Sscanf(f, "%f", &v); e == nil && v > 0 && v < 30000 {
 				hop.RTTs = append(hop.RTTs, math.Round(v*100)/100)
@@ -699,12 +696,10 @@ func handleTraceroute(w http.ResponseWriter, r *http.Request) {
 			hop.AvgRTT = math.Round(sum/float64(len(hop.RTTs))*100) / 100
 		}
 
-		// Classify IP
 		hop.IsPrivate = isPrivateIP(hop.IP)
 		hop.IsAzure = isAzureIP(hop.IP)
 
-		// Async ISP/geo lookup via ip-api.com (free, no key needed)
-		if !hop.IsPrivate && hop.IP != "" {
+		if !hop.IsPrivate {
 			if geo := lookupGeo(hop.IP); geo != nil {
 				hop.ASN = geo.ASN
 				hop.ISP = geo.ISP
@@ -712,30 +707,66 @@ func handleTraceroute(w http.ResponseWriter, r *http.Request) {
 				hop.City = geo.City
 			}
 		}
-
-		// Reverse DNS
 		if names, e := net.LookupAddr(hop.IP); e == nil && len(names) > 0 {
 			hop.Hostname = strings.TrimSuffix(names[0], ".")
 		}
-
-		if hop.IP == host || hop.Hostname == host {
-			result.Reached = true
-		}
-
-		result.Hops = append(result.Hops, hop)
+		return hop
 	}
 
-	result.TotalHops = len(result.Hops)
-
-	// Check if last non-timeout hop reached the destination
-	if !result.Reached && len(result.Hops) > 0 {
-		last := result.Hops[len(result.Hops)-1]
-		if last.IP == host {
-			result.Reached = true
+	// Start traceroute process and stream stdout line by line
+	cmd := exec.Command("traceroute", "-n", "-q", "2", "-w", "2", "-m", "30", host)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		sendEvent("error", map[string]string{"error": err.Error()})
+		return
+	}
+	if err := cmd.Start(); err != nil {
+		// Fall back to tracepath
+		cmd2 := exec.Command("tracepath", "-n", "-m", "30", host)
+		out, err2 := cmd2.Output()
+		if err2 != nil {
+			sendEvent("error", map[string]string{"error": "traceroute/tracepath not available: " + err2.Error()})
+			return
 		}
+		// Parse tracepath output all at once
+		hops := []TracerouteHop{}
+		for _, line := range strings.Split(string(out), "\n") {
+			if h := parseHop(line); h != nil {
+				hops = append(hops, *h)
+				sendEvent("hop", h)
+			}
+		}
+		reached := len(hops) > 0 && !hops[len(hops)-1].Timeout
+		sendEvent("done", map[string]interface{}{
+			"total_hops": len(hops),
+			"reached":    reached,
+			"host":       host,
+		})
+		return
 	}
 
-	writeJSON(w, http.StatusOK, result)
+	// Stream stdout line by line
+	hops := []TracerouteHop{}
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if h := parseHop(line); h != nil {
+			hops = append(hops, *h)
+			sendEvent("hop", h)
+		}
+	}
+	cmd.Wait()
+
+	reached := false
+	if len(hops) > 0 {
+		last := hops[len(hops)-1]
+		reached = !last.Timeout && (last.IP == host || last.Hostname == host)
+	}
+	sendEvent("done", map[string]interface{}{
+		"total_hops": len(hops),
+		"reached":    reached,
+		"host":       host,
+	})
 }
 
 type geoInfo struct {
