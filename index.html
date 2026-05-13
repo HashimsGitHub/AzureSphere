@@ -614,6 +614,21 @@ body::before {
           <!-- Warnings -->
           <div id="tls-warnings" style="display:none;margin-top:12px"></div>
 
+          <!-- HTTP Response Inspection -->
+          <div class="section-label" style="margin-top:20px">HTTP Response Inspection</div>
+          <div id="http-inspect-empty" style="font-size:11px;color:var(--text-muted);padding:8px 0">
+            Running HTTP inspection...
+          </div>
+          <div id="http-inspect-data" style="display:none">
+            <div class="kv-list" id="http-status-kv"></div>
+            <div class="section-label" style="margin-top:14px">Response Headers</div>
+            <div class="kv-list" id="http-headers-kv"></div>
+            <div id="http-redirect-section" style="display:none">
+              <div class="section-label" style="margin-top:14px">Redirect Chain</div>
+              <div class="kv-list" id="http-redirect-kv"></div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -987,6 +1002,7 @@ function addAndRun() {
 const API = {
   tcp:  (host, port) => fetch(`/api/test/tcp?host=${encodeURIComponent(host)}&port=${port}`).then(r=>r.json()),
   tls:  (host, port) => fetch(`/api/test/tls?host=${encodeURIComponent(host)}&port=${port}`).then(r=>r.json()),
+  http: (host, port, scheme) => fetch(`/api/test/http?host=${encodeURIComponent(host)}&port=${port}&scheme=${scheme||'https'}`).then(r=>r.json()),
   dns:  (host)       => fetch(`/api/test/dns?host=${encodeURIComponent(host)}`).then(r=>r.json()),
   ping: (host)       => fetch(`/api/test/ping?host=${encodeURIComponent(host)}`).then(r=>r.json()),
   info: ()           => fetch(`/api/info`).then(r=>r.json()),
@@ -1298,6 +1314,9 @@ async function runTLSInspect() {
       result: res.success ? 'pass' : 'fail',
       latency: Math.round((Date.now() - t0)),
       detail: res.success ? `Grade ${document.getElementById('tls-grade-box').textContent} · ${res.tls_version} · ${res.certificate?.days_left ?? '?'}d left` : (res.error || 'Handshake failed') });
+
+    // Run HTTP inspection in parallel — non-blocking
+    runHTTPInspect(host, port);
 
   } catch(e) {
     document.getElementById('tls-empty').innerHTML =
@@ -1954,6 +1973,91 @@ function escHtml(s) {
 
 
 
+
+// ══════════════════════════════════════════════
+//  HTTP RESPONSE INSPECTION
+// ══════════════════════════════════════════════
+async function runHTTPInspect(host, port) {
+  const emptyEl = document.getElementById('http-inspect-empty');
+  const dataEl  = document.getElementById('http-inspect-data');
+  if (!emptyEl || !dataEl) return;
+
+  emptyEl.style.display = '';
+  emptyEl.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="margin-right:6px"></i> Running HTTP inspection...';
+  dataEl.style.display = 'none';
+
+  try {
+    const scheme = (port === 80) ? 'http' : 'https';
+    const res = await fetch(`/api/test/http?host=${encodeURIComponent(host)}&port=${port}&scheme=${scheme}`);
+    const data = await res.json();
+    renderHTTPInspect(data);
+    addToLog({ type: 'HTTP Inspect', host, port, proto: data.protocol || 'HTTP',
+      result: data.success ? 'pass' : 'fail',
+      latency: Math.round(data.latency_ms),
+      detail: data.success
+        ? `${data.status_code} ${data.status_text} · ${Object.keys(data.headers||{}).length} headers${data.redirect_chain?.length ? ` · ${data.redirect_chain.length} redirect(s)` : ''}`
+        : (data.error || 'HTTP request failed') });
+  } catch(e) {
+    if (emptyEl) {
+      emptyEl.style.display = '';
+      emptyEl.innerHTML = `<span style="color:var(--red);font-size:11px"><i class="fas fa-exclamation-circle"></i> HTTP inspection failed: ${e.message}</span>`;
+    }
+  }
+}
+
+function renderHTTPInspect(data) {
+  const emptyEl = document.getElementById('http-inspect-empty');
+  const dataEl  = document.getElementById('http-inspect-data');
+  if (!emptyEl || !dataEl) return;
+
+  if (!data.success) {
+    emptyEl.style.display = '';
+    emptyEl.innerHTML = `<span style="color:var(--red);font-size:11px"><i class="fas fa-exclamation-circle"></i> ${data.error || 'HTTP request failed'}</span>`;
+    dataEl.style.display = 'none';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  dataEl.style.display = '';
+
+  const statusColor = data.status_code < 300 ? 'var(--green)' : data.status_code < 400 ? 'var(--amber)' : 'var(--red)';
+  document.getElementById('http-status-kv').innerHTML = renderKV([
+    { k: 'Status',        v: data.status_text,                      cls: data.status_code < 400 ? 'ok' : 'fail' },
+    { k: 'Protocol',      v: data.protocol || '—' },
+    { k: 'Final URL',     v: data.final_url || data.url },
+    { k: 'Latency',       v: `${Math.round(data.latency_ms)} ms` },
+    { k: 'Body Sample',   v: `${data.body_size_bytes} bytes read` },
+    { k: 'Redirects',     v: data.redirect_chain?.length ? `${data.redirect_chain.length} redirect(s)` : 'None' },
+  ]);
+
+  // Headers
+  const headers = data.headers || {};
+  const securityHeaders = ['Strict-Transport-Security','X-Content-Type-Options','X-Frame-Options','X-XSS-Protection'];
+  const headerRows = Object.entries(headers).map(([k, v]) => {
+    const isSecurity = securityHeaders.includes(k);
+    return { k, v, cls: isSecurity ? 'ok' : '' };
+  });
+
+  // Flag missing security headers
+  securityHeaders.forEach(h => {
+    if (!headers[h]) headerRows.push({ k: h, v: 'Not present', cls: 'warn' });
+  });
+
+  document.getElementById('http-headers-kv').innerHTML = headerRows.length
+    ? renderKV(headerRows)
+    : '<div style="font-size:11px;color:var(--text-muted);padding:6px 0">No notable headers returned.</div>';
+
+  // Redirect chain
+  const redirectSection = document.getElementById('http-redirect-section');
+  if (data.redirect_chain && data.redirect_chain.length > 0) {
+    redirectSection.style.display = '';
+    document.getElementById('http-redirect-kv').innerHTML = renderKV(
+      data.redirect_chain.map((r, i) => ({ k: `Hop ${i + 1}`, v: r.url }))
+    );
+  } else {
+    redirectSection.style.display = 'none';
+  }
+}
 
 // Sync host field between connectivity tab and AS2 tab
 document.addEventListener('DOMContentLoaded', () => {

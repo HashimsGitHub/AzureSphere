@@ -71,6 +71,29 @@ type TLSResult struct {
 	Timestamp   string     `json:"timestamp"`
 }
 
+type HTTPRedirect struct {
+	URL        string `json:"url"`
+	StatusCode int    `json:"status_code"`
+	StatusText string `json:"status_text"`
+}
+
+type HTTPResult struct {
+	Host          string            `json:"host"`
+	Port          int               `json:"port"`
+	URL           string            `json:"url"`
+	StatusCode    int               `json:"status_code"`
+	StatusText    string            `json:"status_text"`
+	Protocol      string            `json:"protocol"`
+	Headers       map[string]string `json:"headers"`
+	RedirectChain []HTTPRedirect    `json:"redirect_chain,omitempty"`
+	FinalURL      string            `json:"final_url"`
+	LatencyMs     float64           `json:"latency_ms"`
+	BodySizeBytes int               `json:"body_size_bytes"`
+	Success       bool              `json:"success"`
+	Error         string            `json:"error,omitempty"`
+	Timestamp     string            `json:"timestamp"`
+}
+
 type PingResult struct {
 	Host       string    `json:"host"`
 	Sent       int       `json:"sent"`
@@ -449,6 +472,116 @@ func handleTLS(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// GET/POST /api/test/http   ?host=x&port=y&scheme=https
+func handleHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	host, port, err := parseRequest(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, HTTPResult{Error: err.Error(), Timestamp: now()})
+		return
+	}
+	scheme := r.URL.Query().Get("scheme")
+	if scheme == "" {
+		if port == 80 {
+			scheme = "http"
+		} else {
+			scheme = "https"
+		}
+	}
+	if port == 0 {
+		if scheme == "http" {
+			port = 80
+		} else {
+			port = 443
+		}
+	}
+
+	targetURL := fmt.Sprintf("%s://%s:%d", scheme, host, port)
+	result := HTTPResult{
+		Host:      host,
+		Port:      port,
+		URL:       targetURL,
+		Timestamp: now(),
+	}
+
+	var redirectChain []HTTPRedirect
+
+	// Custom transport — skip TLS verify, track redirects manually
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DialContext: (&net.Dialer{Timeout: 8 * time.Second}).DialContext,
+	}
+	client := &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			// Record the redirect we just followed
+			prev := via[len(via)-1]
+			redirectChain = append(redirectChain, HTTPRedirect{
+				URL:        prev.URL.String(),
+				StatusCode: 0, // filled below from response
+				StatusText: "",
+			})
+			return nil
+		},
+	}
+
+	start := time.Now()
+	resp, err := client.Get(targetURL)
+	result.LatencyMs = math.Round(float64(time.Since(start).Microseconds())/10) / 100
+
+	if err != nil {
+		result.Success = false
+		result.Error = err.Error()
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read up to 4KB of body just for size measurement
+	body := make([]byte, 4096)
+	n, _ := resp.Body.Read(body)
+
+	result.Success = true
+	result.StatusCode = resp.StatusCode
+	result.StatusText = resp.Status
+	result.FinalURL = resp.Request.URL.String()
+	result.BodySizeBytes = n
+	result.Protocol = resp.Proto
+
+	// Capture key response headers
+	important := []string{
+		"Content-Type", "Content-Length", "Server", "X-Powered-By",
+		"Strict-Transport-Security", "X-Content-Type-Options",
+		"X-Frame-Options", "X-XSS-Protection", "Cache-Control",
+		"Location", "Access-Control-Allow-Origin", "Set-Cookie",
+		"WWW-Authenticate", "X-Request-Id", "X-Correlation-Id",
+	}
+	headers := make(map[string]string)
+	for _, key := range important {
+		if val := resp.Header.Get(key); val != "" {
+			headers[key] = val
+		}
+	}
+	// Also capture any SAP/Azure/custom x- headers
+	for key, vals := range resp.Header {
+		lk := strings.ToLower(key)
+		if strings.HasPrefix(lk, "x-sap-") || strings.HasPrefix(lk, "x-ms-") || strings.HasPrefix(lk, "x-azure-") {
+			headers[key] = strings.Join(vals, ", ")
+		}
+	}
+	result.Headers = headers
+	result.RedirectChain = redirectChain
+
+	writeJSON(w, http.StatusOK, result)
+}
+
 // POST /api/test/ping   ?host=x
 func handlePing(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
@@ -646,6 +779,7 @@ func main() {
 	mux.HandleFunc("/api/test/tcp",   handleTCP)
 	mux.HandleFunc("/api/test/dns",   handleDNS)
 	mux.HandleFunc("/api/test/tls",   handleTLS)
+	mux.HandleFunc("/api/test/http",  handleHTTP)
 	mux.HandleFunc("/api/test/ping",  handlePing)
 	mux.HandleFunc("/api/as2/send",      handleAS2Send)
 	mux.HandleFunc("/api/vmb/messages",  handleVMBMessages)
