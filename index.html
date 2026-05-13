@@ -399,6 +399,9 @@ body::before {
     <div class="pill"><span class="dot blink"></span> Agent Online</div>
     <div class="pill"><i class="fas fa-server" style="font-size:10px;color:var(--cyan)"></i> <span id="vm-hostname">Loading...</span></div>
     <div id="clock" class="pill"><i class="far fa-clock" style="font-size:10px"></i> --:--:--</div>
+    <button class="pill" id="btn-open-log" onclick="openLogDrawer()" style="cursor:pointer;border:1px solid var(--border2);background:var(--bg3);color:var(--cyan);font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:20px">
+      <i class="fas fa-list-alt"></i>&nbsp; Test Log <span id="log-badge" style="display:none;background:var(--cyan);color:#000;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px">0</span>
+    </button>
   </div>
 </div>
 
@@ -451,7 +454,6 @@ body::before {
   <button class="tab active" onclick="switchTab('connectivity')">Connectivity</button>
   <button class="tab" onclick="switchTab('tls')">TLS / Certs</button>
   <button class="tab" onclick="switchTab('dns')">DNS</button>
-  <button class="tab" onclick="switchTab('log')">Test Log</button>
   <button class="tab" onclick="switchTab('as2')">AS2 Exchange</button>
   <button class="tab" onclick="switchTab('btp')">SAP BTP</button>
 </div>
@@ -691,31 +693,41 @@ body::before {
 <!-- ══════════════════════════════════════════════ -->
 <!--  TAB: TEST LOG (F5)                           -->
 <!-- ══════════════════════════════════════════════ -->
-<div id="tab-log" class="tab-content">
-  <div class="panel">
-    <div class="panel-title"><i class="fas fa-list-alt"></i> Test History Log</div>
-    <div class="log-wrap">
-      <table class="log-table">
-        <thead>
-          <tr>
-            <th>Timestamp</th>
-            <th>Target</th>
-            <th>Port</th>
-            <th>Protocol</th>
-            <th>Result</th>
-            <th>Latency</th>
-            <th>Detail</th>
-          </tr>
-        </thead>
-        <tbody id="log-body">
-          <tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted)">No tests run yet.</td></tr>
-        </tbody>
-      </table>
+<!-- ══════════════════════════════════════════════ -->
+<!--  TEST LOG DRAWER (header button)              -->
+<!-- ══════════════════════════════════════════════ -->
+<div id="log-overlay" onclick="closeLogDrawer()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:900;backdrop-filter:blur(2px)"></div>
+<div id="log-drawer" style="display:none;position:fixed;top:0;right:0;width:820px;max-width:96vw;height:100vh;background:var(--bg2);border-left:1px solid var(--border2);z-index:901;flex-direction:column;box-shadow:-8px 0 40px rgba(0,0,0,0.6)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:10px">
+      <i class="fas fa-list-alt" style="color:var(--cyan)"></i>
+      <span style="font-size:14px;font-weight:600;color:var(--text)">Test Log</span>
+      <span id="drawer-log-count" style="font-size:11px;color:var(--text-muted)"></span>
     </div>
-    <div class="log-actions">
+    <div style="display:flex;gap:8px;align-items:center">
       <button class="btn-sm" onclick="exportLog()"><i class="fas fa-download"></i> Export JSON</button>
-      <button class="btn-sm danger" onclick="clearLog()"><i class="fas fa-trash"></i> Clear Log</button>
+      <button class="btn-sm danger" onclick="clearLog()"><i class="fas fa-trash"></i> Clear</button>
+      <button onclick="closeLogDrawer()" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:4px 8px;line-height:1">&times;</button>
     </div>
+  </div>
+  <div style="overflow-y:auto;flex:1;padding:16px 22px">
+    <table class="log-table" style="width:100%">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Type</th>
+          <th>Target</th>
+          <th>Port</th>
+          <th>Protocol</th>
+          <th>Result</th>
+          <th>Latency</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody id="log-body">
+        <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">No tests run yet.</td></tr>
+      </tbody>
+    </table>
   </div>
 </div>
 
@@ -911,7 +923,7 @@ document.getElementById('vm-hostname').textContent =
 // ══════════════════════════════════════════════
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    const tabs = ['connectivity','tls','dns','log','as2','btp'];
+    const tabs = ['connectivity','tls','dns','as2','btp'];
     t.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1282,6 +1294,10 @@ async function runTLSInspect() {
     renderLegacyTLS();
     renderCertDownloads(res, host);
     updateStats();
+    addToLog({ type: 'TLS / Cert', host, port, proto: res.tls_version || 'TLS',
+      result: res.success ? 'pass' : 'fail',
+      latency: Math.round((Date.now() - t0)),
+      detail: res.success ? `Grade ${document.getElementById('tls-grade-box').textContent} · ${res.tls_version} · ${res.certificate?.days_left ?? '?'}d left` : (res.error || 'Handshake failed') });
 
   } catch(e) {
     document.getElementById('tls-empty').innerHTML =
@@ -1682,6 +1698,10 @@ async function runDNS() {
     dnsResult = d;
     renderDNSData(d);
     if (d.ips && d.ips.length > 0) renderPing(d.ips[0]);
+    addToLog({ type: 'DNS', host, port: 53, proto: 'DNS',
+      result: d.error ? 'fail' : 'pass',
+      latency: d.resTime || null,
+      detail: d.error ? d.error : `Resolved → ${d.ips.join(', ')} (${d.isPrivate ? 'Private' : d.isAzure ? 'Azure' : 'Public'})` });
   } catch(e) {
     document.getElementById('dns-empty').innerHTML =
       `<i class="fas fa-times-circle" style="color:var(--red);font-size:24px;display:block;margin-bottom:10px"></i> Error: ${e.message}`;
@@ -1777,27 +1797,51 @@ function renderKV(pairs) {
 }
 
 // ══════════════════════════════════════════════
-//  TEST LOG (F5)
+//  TEST LOG — drawer + all test types
 // ══════════════════════════════════════════════
 function addToLog(t) {
   testLog.unshift({
-    ts: new Date().toISOString(),
-    host: t.host, port: t.port, proto: t.proto,
-    result: t.status, latency: t.latency,
-    detail: t.status==='pass' ? `Connected in ${t.latency}ms` : 'Connection refused / timeout'
+    ts:      new Date().toISOString(),
+    type:    t.type    || 'Connectivity',
+    host:    t.host    || '—',
+    port:    t.port    || '—',
+    proto:   t.proto   || '—',
+    result:  t.result  || t.status || 'unknown',
+    latency: t.latency || null,
+    detail:  t.detail  || (t.result === 'pass' || t.result === 'ok' ? `Connected in ${t.latency}ms` : 'Failed / timeout')
   });
   renderLog();
+  // update badge
+  const badge = document.getElementById('log-badge');
+  badge.style.display = '';
+  badge.textContent = testLog.length;
+}
+
+function openLogDrawer() {
+  document.getElementById('log-overlay').style.display = '';
+  const d = document.getElementById('log-drawer');
+  d.style.display = 'flex';
+  renderLog();
+}
+
+function closeLogDrawer() {
+  document.getElementById('log-overlay').style.display = 'none';
+  document.getElementById('log-drawer').style.display = 'none';
 }
 
 function renderLog() {
   const tbody = document.getElementById('log-body');
+  if (!tbody) return;
+  const count = document.getElementById('drawer-log-count');
+  if (count) count.textContent = testLog.length ? `${testLog.length} entries` : '';
   if (testLog.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted)">No tests run yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">No tests run yet.</td></tr>';
     return;
   }
   tbody.innerHTML = testLog.map(r => `
     <tr>
-      <td style="color:var(--text-muted)">${new Date(r.ts).toLocaleTimeString()}</td>
+      <td style="color:var(--text-muted);white-space:nowrap">${new Date(r.ts).toLocaleTimeString()}</td>
+      <td style="color:var(--amber);font-size:11px">${r.type}</td>
       <td>${r.host}</td>
       <td style="color:var(--cyan)">:${r.port}</td>
       <td style="color:var(--text-dim)">${r.proto}</td>
@@ -1814,7 +1858,10 @@ function exportLog() {
 }
 
 function clearLog() {
-  testLog = []; renderLog();
+  testLog = [];
+  renderLog();
+  const badge = document.getElementById('log-badge');
+  badge.style.display = 'none';
 }
 
 // init
@@ -1860,6 +1907,10 @@ async function as2Send() {
     });
     const receipt = await resp.json();
     renderAS2Receipt(receipt);
+    addToLog({ type: 'AS2 Exchange', host, port: 9090, proto: 'AS2/HTTP',
+      result: receipt.status === 'processed' ? 'pass' : 'fail',
+      latency: null,
+      detail: `${receipt.status || 'unknown'} · ${receipt.disposition || '—'} · MsgID: ${receipt.message_id || '—'}` });
 
   } catch(e) {
     renderAS2Receipt({ status: 'error', disposition: e.message });
@@ -1966,6 +2017,10 @@ async function runBTPTest() {
     const ok = data.success === true;
 
     setBTPCard(port, ok ? 'reachable' : 'unreachable', latency);
+    addToLog({ type: 'SAP BTP', host, port, proto: label,
+      result: ok ? 'pass' : 'fail',
+      latency,
+      detail: ok ? `${label} reachable · ${latency}ms` : (data.error || 'Unreachable / timeout') });
 
     // Show detail
     document.getElementById('btp-result-placeholder').style.display = 'none';
