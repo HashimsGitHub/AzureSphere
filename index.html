@@ -381,102 +381,6 @@ body::before {
   .port-grid { grid-template-columns:1fr 1fr; }
   .tabs .tab { padding:8px 12px; font-size:12px; }
 }
-/* ── UberRoute ──────────────────────────────── */
-.uber-hop {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-  opacity: 0;
-  transform: translateY(8px);
-  animation: hopReveal 0.35s ease forwards;
-}
-.uber-hop:last-child { border-bottom: none; }
-@keyframes hopReveal {
-  to { opacity: 1; transform: translateY(0); }
-}
-.uber-hop-num {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  flex-shrink: 0;
-  font-family: var(--mono);
-}
-.uber-hop-line {
-  position: absolute;
-  left: 13px;
-  top: 28px;
-  bottom: -10px;
-  width: 2px;
-  background: var(--border);
-}
-.uber-hop-connector {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex-shrink: 0;
-}
-.uber-hop-body { flex: 1; min-width: 0; }
-.uber-hop-ip {
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  font-family: var(--mono);
-}
-.uber-hop-hostname {
-  font-size: 10px;
-  color: var(--text-muted);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.uber-hop-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-.uber-tag {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-family: var(--mono);
-}
-.uber-tag-azure   { background: rgba(0,210,255,0.15); color: var(--cyan);  border: 1px solid rgba(0,210,255,0.3); }
-.uber-tag-private { background: rgba(0,230,118,0.12); color: var(--green); border: 1px solid rgba(0,230,118,0.3); }
-.uber-tag-isp     { background: var(--bg3);           color: var(--text);  border: 1px solid var(--border); }
-.uber-tag-geo     { background: var(--bg3);           color: var(--text-dim); border: 1px solid var(--border); }
-.uber-rtt-bars {
-  display: flex;
-  gap: 4px;
-  align-items: flex-end;
-  height: 24px;
-  margin-top: 6px;
-}
-.uber-rtt-bar {
-  width: 10px;
-  border-radius: 2px 2px 0 0;
-  min-height: 3px;
-}
-.uber-rtt-label {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-family: var(--mono);
-  margin-top: 2px;
-}
-.hop-green  { background: var(--green);      color: #000; }
-.hop-amber  { background: var(--amber);      color: #000; }
-.hop-red    { background: var(--red);        color: #fff; }
-.hop-grey   { background: var(--text-muted); color: #000; }
-.hop-azure-ring { box-shadow: 0 0 0 2px var(--cyan); }
 </style>
 </head>
 <body>
@@ -552,7 +456,6 @@ body::before {
   <button class="tab" onclick="switchTab('dns')">DNS</button>
   <button class="tab" onclick="switchTab('as2')">AS2 Exchange</button>
   <button class="tab" onclick="switchTab('btp')">SAP BTP</button>
-  <button class="tab" onclick="switchTab('uberroute')" style="color:var(--cyan);font-weight:600">UberRoute</button>
 </div>
 
 <!-- ══════════════════════════════════════════════ -->
@@ -985,107 +888,6 @@ IEA*1*000000001~</textarea>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════ -->
-<!--  TAB: UBERROUTE                               -->
-<!-- ══════════════════════════════════════════════ -->
-<div id="tab-uberroute" class="tab-content">
-  <div class="main-grid">
-
-    <!-- LEFT: Controls + Summary -->
-    <div style="display:flex;flex-direction:column;gap:16px">
-      <div class="panel">
-        <div class="panel-title"><i class="fas fa-route" style="color:var(--cyan)"></i> UberRoute</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Next-level traceroute — animated hop discovery, ISP/ASN identification, Azure backbone detection, latency heatmap.</div>
-        <div class="section-label">Target Host or IP</div>
-        <input class="inp" id="uber-host" placeholder="10.0.1.50 or host.corp.internal" />
-        <button class="btn-run" id="btn-uber" onclick="runUberRoute()" style="margin-top:12px">
-          <i class="fas fa-route"></i>&nbsp; Launch UberRoute
-        </button>
-      </div>
-
-      <!-- Summary cards -->
-      <div class="panel" id="uber-summary-panel" style="display:none">
-        <div class="panel-title"><i class="fas fa-chart-bar"></i> Route Summary</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px">
-          <div class="metric-card">
-            <div class="metric-label">Total Hops</div>
-            <div class="metric-value" id="uber-stat-hops">—</div>
-            <div class="metric-sub" id="uber-stat-hops-sub">discovered</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Destination</div>
-            <div class="metric-value" id="uber-stat-reached" style="font-size:18px">—</div>
-            <div class="metric-sub" id="uber-stat-reached-sub">status</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Azure Hops</div>
-            <div class="metric-value" id="uber-stat-azure">—</div>
-            <div class="metric-sub">backbone hops</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Avg Latency</div>
-            <div class="metric-value" id="uber-stat-latency">—</div>
-            <div class="metric-sub">ms avg RTT</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Legend -->
-      <div class="panel">
-        <div class="panel-title"><i class="fas fa-info-circle"></i> Legend</div>
-        <div style="display:flex;flex-direction:column;gap:6px;font-size:11px">
-          <div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--green)"></span> Fast &lt; 20ms</div>
-          <div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--amber)"></span> Moderate 20–100ms</div>
-          <div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--red)"></span> High &gt; 100ms</div>
-          <div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--text-muted)"></span> Timeout / ICMP blocked</div>
-          <div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:4px;background:rgba(0,210,255,0.25);border:1px solid var(--cyan)"></span> Azure backbone</div>
-          <div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:4px;background:rgba(0,230,118,0.15);border:1px solid var(--green)"></span> Private / VNet</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- RIGHT: Animated hop diagram -->
-    <div class="panel" style="min-height:400px">
-      <div class="panel-title">
-        <i class="fas fa-project-diagram"></i> Route Path
-        <span id="uber-live-badge" style="display:none;margin-left:8px;font-size:10px;color:var(--cyan);animation:pulse 1s infinite">● LIVE</span>
-      </div>
-
-      <!-- Empty state -->
-      <div id="uber-empty" style="text-align:center;padding:60px 20px;color:var(--text-muted)">
-        <i class="fas fa-route" style="font-size:40px;display:block;margin-bottom:16px;opacity:0.15"></i>
-        <div style="font-size:13px">Enter a target and launch UberRoute</div>
-        <div style="font-size:11px;margin-top:6px;opacity:0.6">Hops will appear here as they are discovered</div>
-      </div>
-
-      <!-- Path nodes — rendered dynamically -->
-      <div id="uber-path" style="display:none;padding:8px 0"></div>
-
-    </div>
-  </div>
-
-  <!-- Full hop table -->
-  <div class="panel" style="margin-top:16px" id="uber-table-panel" style="display:none">
-    <div class="panel-title"><i class="fas fa-table"></i> Full Hop Detail</div>
-    <table class="log-table" style="width:100%">
-      <thead><tr>
-        <th>#</th>
-        <th>IP Address</th>
-        <th>Hostname</th>
-        <th>RTT 1</th>
-        <th>RTT 2</th>
-        <th>Avg RTT</th>
-        <th>ISP / ASN</th>
-        <th>Location</th>
-        <th>Type</th>
-      </tr></thead>
-      <tbody id="uber-table-body">
-        <tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text-muted)">No trace run yet.</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
 <!-- FOOTER -->
 <div class="footer">
   <div>© 2026 AzureSphere · Digital Twin · Enterprise Connectivity Diagnostic</div>
@@ -1136,7 +938,7 @@ document.getElementById('vm-hostname').textContent =
 // ══════════════════════════════════════════════
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    const tabs = ['connectivity','tls','dns','as2','btp','uberroute'];
+    const tabs = ['connectivity','tls','dns','as2','btp'];
     t.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1198,13 +1000,12 @@ function addAndRun() {
 
 // ── Agent API — always relative URLs so public IP / private IP / localhost all work ──
 const API = {
-  tcp:        (host, port) => fetch(`/api/test/tcp?host=${encodeURIComponent(host)}&port=${port}`).then(r=>r.json()),
-  tls:        (host, port) => fetch(`/api/test/tls?host=${encodeURIComponent(host)}&port=${port}`).then(r=>r.json()),
-  http:       (host, port, scheme) => fetch(`/api/test/http?host=${encodeURIComponent(host)}&port=${port}&scheme=${scheme||'https'}`).then(r=>r.json()),
-  dns:        (host)       => fetch(`/api/test/dns?host=${encodeURIComponent(host)}`).then(r=>r.json()),
-  ping:       (host)       => fetch(`/api/test/ping?host=${encodeURIComponent(host)}`).then(r=>r.json()),
-  traceroute: (host)       => fetch(`/api/test/traceroute?host=${encodeURIComponent(host)}`).then(r=>r.json()),
-  info:       ()           => fetch(`/api/info`).then(r=>r.json()),
+  tcp:  (host, port) => fetch(`/api/test/tcp?host=${encodeURIComponent(host)}&port=${port}`).then(r=>r.json()),
+  tls:  (host, port) => fetch(`/api/test/tls?host=${encodeURIComponent(host)}&port=${port}`).then(r=>r.json()),
+  http: (host, port, scheme) => fetch(`/api/test/http?host=${encodeURIComponent(host)}&port=${port}&scheme=${scheme||'https'}`).then(r=>r.json()),
+  dns:  (host)       => fetch(`/api/test/dns?host=${encodeURIComponent(host)}`).then(r=>r.json()),
+  ping: (host)       => fetch(`/api/test/ping?host=${encodeURIComponent(host)}`).then(r=>r.json()),
+  info: ()           => fetch(`/api/info`).then(r=>r.json()),
 };
 
 // Check agent availability on load
@@ -2258,239 +2059,7 @@ function renderHTTPInspect(data) {
   }
 }
 
-// ══════════════════════════════════════════════
-//  UBERROUTE
-// ══════════════════════════════════════════════
-let uberRunning = false;
-
-async function runUberRoute() {
-  const host = document.getElementById('uber-host').value.trim();
-  if (!host) { document.getElementById('uber-host').focus(); return; }
-  if (uberRunning) return;
-
-  uberRunning = true;
-  const btn = document.getElementById('btn-uber');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>&nbsp; Tracing route...';
-
-  document.getElementById('uber-empty').style.display = 'none';
-  document.getElementById('uber-path').style.display = '';
-  document.getElementById('uber-path').innerHTML = '';
-  document.getElementById('uber-summary-panel').style.display = 'none';
-  document.getElementById('uber-live-badge').style.display = '';
-  document.getElementById('uber-table-panel').style.display = 'none';
-  document.getElementById('uber-table-body').innerHTML =
-    '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text-muted)"><i class="fas fa-circle-notch fa-spin"></i> Tracing...</td></tr>';
-
-  const allHops = [];
-  let seenHops = 0;
-
-  appendUberNode({
-    hop: 0, ip: window.location.hostname, hostname: 'VM A (Source)',
-    rtts: [], avg_rtt: 0, timeout: false, is_private: true, is_azure: false,
-    isp: '', asn: '', country: '', city: '', isSource: true
-  });
-
-  // Start the job
-  let jobId;
-  try {
-    const startRes = await fetch('/api/test/traceroute/start?host=' + encodeURIComponent(host), { method: 'POST' });
-    const startData = await startRes.json();
-    if (startData.error) throw new Error(startData.error);
-    jobId = startData.job_id;
-  } catch(e) {
-    document.getElementById('uber-path').innerHTML +=
-      '<div style="padding:20px;color:var(--red);font-size:12px"><i class="fas fa-exclamation-circle"></i> Failed to start: ' + esc(e.message) + '</div>';
-    uberRunning = false;
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-route"></i>&nbsp; Launch UberRoute';
-    document.getElementById('uber-live-badge').style.display = 'none';
-    return;
-  }
-
-  // Poll every 1 second for new hops
-  const pollInterval = setInterval(async function() {
-    try {
-      const res = await fetch('/api/test/traceroute/poll?job_id=' + jobId);
-      const data = await res.json();
-
-      if (data.error) {
-        clearInterval(pollInterval);
-        document.getElementById('uber-path').innerHTML +=
-          '<div style="padding:20px;color:var(--red);font-size:12px"><i class="fas fa-exclamation-circle"></i> ' + esc(data.error) + '</div>';
-        finish();
-        return;
-      }
-
-      // Render any new hops
-      const hops = data.hops || [];
-      while (seenHops < hops.length) {
-        allHops.push(hops[seenHops]);
-        appendUberNode(hops[seenHops]);
-        seenHops++;
-      }
-
-      if (data.done) {
-        clearInterval(pollInterval);
-
-        appendUberNode({
-          hop: seenHops + 1, ip: host, hostname: 'Destination',
-          rtts: [], avg_rtt: 0, timeout: !data.reached,
-          is_private: false, is_azure: false,
-          isp: '', country: '', isDestination: true, reached: data.reached
-        });
-
-        renderUberSummary({ hops: allHops, total_hops: allHops.length, reached: data.reached });
-        renderUberTable(allHops);
-
-        var rttHops = allHops.filter(function(h) { return !h.timeout && h.avg_rtt > 0; });
-        var avgRTT = rttHops.length ? (rttHops.reduce(function(s,h){return s+h.avg_rtt;},0)/rttHops.length).toFixed(1) : 0;
-        addToLog({
-          type: 'UberRoute', host: host, port: 0, proto: 'ICMP',
-          result: data.reached ? 'pass' : 'fail',
-          latency: avgRTT,
-          detail: allHops.length + ' hops · ' + allHops.filter(function(h){return h.is_azure;}).length + ' Azure · ' + (data.reached ? 'Reached' : 'Not reached')
-        });
-
-        finish();
-      }
-    } catch(e) {
-      clearInterval(pollInterval);
-      finish();
-    }
-  }, 1000);
-
-  // Safety timeout
-  setTimeout(function() {
-    if (uberRunning) { clearInterval(pollInterval); finish(); }
-  }, 120000);
-
-  function finish() {
-    uberRunning = false;
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-route"></i>&nbsp; Launch UberRoute';
-    document.getElementById('uber-live-badge').style.display = 'none';
-  }
-}
-function hopColor(avgRTT, timeout) {
-  if (timeout)      return 'hop-grey';
-  if (avgRTT < 20)  return 'hop-green';
-  if (avgRTT < 100) return 'hop-amber';
-  return 'hop-red';
-}
-
-function hopColorHex(avgRTT, timeout) {
-  if (timeout)      return 'var(--text-muted)';
-  if (avgRTT < 20)  return 'var(--green)';
-  if (avgRTT < 100) return 'var(--amber)';
-  return 'var(--red)';
-}
-
-function appendUberNode(hop) {
-  const container = document.getElementById('uber-path');
-  const isSource = hop.isSource;
-  const isDest   = hop.isDestination;
-  const color    = isSource ? 'hop-green' : isDest ? (hop.reached ? 'hop-green' : 'hop-grey') : hopColor(hop.avg_rtt, hop.timeout);
-  const azureRing = hop.is_azure ? 'hop-azure-ring' : '';
-  const isLast   = isDest;
-
-  // RTT sparkline bars
-  let sparkHtml = '';
-  if (hop.rtts && hop.rtts.length > 0) {
-    const maxRTT = Math.max(...hop.rtts, 1);
-    sparkHtml = `<div class="uber-rtt-bars">` +
-      hop.rtts.map(r => {
-        const h = Math.max(3, Math.round((r / maxRTT) * 24));
-        return `<div class="uber-rtt-bar" style="height:${h}px;background:${hopColorHex(r, false)}" title="${r}ms"></div>`;
-      }).join('') +
-      `</div><div class="uber-rtt-label">${hop.rtts.map(r=>r+'ms').join(' · ')}</div>`;
-  } else if (hop.timeout) {
-    sparkHtml = `<div class="uber-rtt-label" style="color:var(--text-muted)">* * * (ICMP blocked / timeout)</div>`;
-  }
-
-  // Tags
-  let tags = '';
-  if (isSource)      tags += `<span class="uber-tag uber-tag-private">SOURCE</span>`;
-  if (isDest)        tags += `<span class="uber-tag ${hop.reached ? 'uber-tag-private' : 'uber-tag-isp'}">${hop.reached ? 'REACHED ✓' : 'NOT REACHED ✗'}</span>`;
-  if (hop.is_azure)  tags += `<span class="uber-tag uber-tag-azure"><i class="fas fa-cloud"></i> Azure</span>`;
-  if (hop.is_private && !isSource) tags += `<span class="uber-tag uber-tag-private">Private / VNet</span>`;
-  if (hop.isp)       tags += `<span class="uber-tag uber-tag-isp">${esc(hop.isp)}</span>`;
-  if (hop.asn)       tags += `<span class="uber-tag uber-tag-isp">${esc(hop.asn)}</span>`;
-  if (hop.country)   tags += `<span class="uber-tag uber-tag-geo">${esc(hop.city ? hop.city + ', ' + hop.country : hop.country)}</span>`;
-
-  const connectorLine = !isLast
-    ? `<div style="width:2px;flex:1;min-height:20px;background:var(--border);margin-top:4px"></div>`
-    : '';
-
-  const hopLabel = isSource ? 'SRC' : isDest ? 'DST' : hop.hop;
-  const ipDisplay = hop.timeout ? '* * *' : (hop.ip || '—');
-  const hostnameDisplay = hop.timeout ? 'No response' : (hop.hostname && hop.hostname !== hop.ip ? hop.hostname : '');
-
-  const el = document.createElement('div');
-  el.style.display = 'flex';
-  el.style.gap = '12px';
-  el.style.alignItems = 'flex-start';
-  el.style.paddingBottom = '4px';
-  el.innerHTML = `
-    <div class="uber-hop-connector">
-      <div class="uber-hop-num ${color} ${azureRing}">${hopLabel}</div>
-      ${connectorLine}
-    </div>
-    <div class="uber-hop-body uber-hop" style="animation-delay:0ms;flex:1;padding-bottom:12px;border-bottom:${isLast?'none':'1px solid var(--border)'}">
-      <div class="uber-hop-ip">${esc(ipDisplay)}</div>
-      ${hostnameDisplay ? `<div class="uber-hop-hostname">${esc(hostnameDisplay)}</div>` : ''}
-      <div class="uber-hop-meta">${tags}</div>
-      ${sparkHtml}
-    </div>`;
-  container.appendChild(el);
-  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function renderUberSummary(data) {
-  const hops = data.hops || [];
-  const azureHops = hops.filter(h => h.is_azure).length;
-  const rttHops = hops.filter(h => !h.timeout && h.avg_rtt > 0);
-  const avgRTT = rttHops.length
-    ? (rttHops.reduce((s,h) => s + h.avg_rtt, 0) / rttHops.length).toFixed(1)
-    : '—';
-
-  document.getElementById('uber-summary-panel').style.display = '';
-  document.getElementById('uber-stat-hops').textContent = data.total_hops;
-  document.getElementById('uber-stat-hops-sub').textContent = `${hops.filter(h=>h.timeout).length} timeout(s)`;
-  document.getElementById('uber-stat-reached').textContent = data.reached ? '✓' : '✗';
-  document.getElementById('uber-stat-reached').style.color = data.reached ? 'var(--green)' : 'var(--red)';
-  document.getElementById('uber-stat-reached-sub').textContent = data.reached ? 'Destination reached' : 'Not reached';
-  document.getElementById('uber-stat-azure').textContent = azureHops;
-  document.getElementById('uber-stat-latency').textContent = avgRTT === '—' ? '—' : avgRTT + ' ms';
-}
-
-function renderUberTable(hops) {
-  document.getElementById('uber-table-panel').style.display = '';
-  if (!hops || hops.length === 0) return;
-  document.getElementById('uber-table-body').innerHTML = hops.map(h => {
-    const typeTag = h.is_azure
-      ? `<span class="uber-tag uber-tag-azure">Azure</span>`
-      : h.is_private
-        ? `<span class="uber-tag uber-tag-private">Private</span>`
-        : h.timeout
-          ? `<span style="color:var(--text-muted);font-size:10px">Timeout</span>`
-          : `<span class="uber-tag uber-tag-isp">Public</span>`;
-    const color = hopColorHex(h.avg_rtt, h.timeout);
-    return `<tr>
-      <td style="color:var(--cyan);font-family:var(--mono)">${h.hop}</td>
-      <td style="font-family:var(--mono);color:#fff">${h.timeout ? '* * *' : esc(h.ip||'—')}</td>
-      <td style="font-size:11px;color:var(--text-muted)">${esc(h.hostname||'—')}</td>
-      <td style="font-family:var(--mono);color:${hopColorHex(h.rtts?.[0]||0, h.timeout)}">${h.rtts?.[0] ? h.rtts[0]+'ms' : '—'}</td>
-      <td style="font-family:var(--mono);color:${hopColorHex(h.rtts?.[1]||0, h.timeout)}">${h.rtts?.[1] ? h.rtts[1]+'ms' : '—'}</td>
-      <td style="font-family:var(--mono);color:${color};font-weight:600">${h.avg_rtt ? h.avg_rtt+'ms' : '—'}</td>
-      <td style="font-size:11px">${h.isp ? esc(h.isp) : '—'}${h.asn ? `<br><span style="color:var(--text-muted);font-size:10px">${esc(h.asn)}</span>` : ''}</td>
-      <td style="font-size:11px;color:var(--text-muted)">${h.city ? esc(h.city)+', ' : ''}${h.country ? esc(h.country) : '—'}</td>
-      <td>${typeTag}</td>
-    </tr>`;
-  }).join('');
-}
-
-
+// Sync host field between connectivity tab and AS2 tab
 document.addEventListener('DOMContentLoaded', () => {
   const mainHost = document.getElementById('inp-host');
   const as2Host  = document.getElementById('as2-host');
@@ -2503,12 +2072,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (mainHost && btpHost) {
     mainHost.addEventListener('input', () => { if (!btpHost.value) btpHost.value = mainHost.value; });
     btpHost.addEventListener('input', () => { if (!mainHost.value) mainHost.value = btpHost.value; });
-  }
-  // Sync host to UberRoute tab
-  const uberHost = document.getElementById('uber-host');
-  if (mainHost && uberHost) {
-    mainHost.addEventListener('input', () => { if (!uberHost.value) uberHost.value = mainHost.value; });
-    uberHost.addEventListener('input', () => { if (!mainHost.value) mainHost.value = uberHost.value; });
   }
 });
 
