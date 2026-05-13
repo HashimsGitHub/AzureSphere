@@ -127,10 +127,13 @@ func isPrivateIP(ip string) bool {
 	if parsed == nil {
 		return false
 	}
-	private := []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"}
+	private := []string{
+		"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+		"169.254.0.0/16", "127.0.0.0/8", "::1/128", "fc00::/7",
+	}
 	for _, cidr := range private {
 		_, network, _ := net.ParseCIDR(cidr)
-		if network.Contains(parsed) {
+		if network != nil && network.Contains(parsed) {
 			return true
 		}
 	}
@@ -763,24 +766,6 @@ func lookupGeo(ip string) *geoInfo {
 		return nil
 	}
 	return &geoInfo{ASN: data.AS, ISP: data.ISP, Country: data.Country, City: data.City}
-}
-
-func isPrivateIP(ip string) bool {
-	parsed := net.ParseIP(ip)
-	if parsed == nil {
-		return false
-	}
-	privateRanges := []string{
-		"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
-		"127.0.0.0/8", "169.254.0.0/16", "::1/128", "fc00::/7",
-	}
-	for _, cidr := range privateRanges {
-		_, network, err := net.ParseCIDR(cidr)
-		if err == nil && network.Contains(parsed) {
-			return true
-		}
-	}
-	return false
 }
 
 func isAzureIP(ip string) bool {
