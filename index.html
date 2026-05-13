@@ -1960,14 +1960,12 @@ async function runBTPTest() {
   const start = Date.now();
 
   try {
-    const res = await fetch(`${agentBase}/api/test`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ host, port, protocol: 'BTP' })
+    const res = await fetch(`${agentBase}/api/test/tcp?host=${encodeURIComponent(host)}&port=${port}`, {
+      method: 'POST'
     });
     const data = await res.json();
-    const latency = Date.now() - start;
-    const ok = data.success || data.status === 'open' || data.reachable === true;
+    const latency = data.latency_ms ?? (Date.now() - start);
+    const ok = data.success === true;
 
     setBTPCard(port, ok ? 'reachable' : 'unreachable', latency);
 
@@ -1982,7 +1980,7 @@ async function runBTPTest() {
       <div class="kv"><span class="k">Status</span><span class="v" style="color:${ok?'var(--cyan)':'var(--red)'}; font-weight:600">${ok ? 'Reachable ✓' : 'Unreachable ✗'}</span></div>
       <div class="kv"><span class="k">Latency</span><span class="v">${latency} ms</span></div>
       <div class="kv"><span class="k">Tested At</span><span class="v">${new Date().toISOString()}</span></div>
-      ${data.banner ? `<div class="kv"><span class="k">Banner</span><span class="v" style="font-size:11px;font-family:var(--mono)">${data.banner}</span></div>` : ''}
+      ${data.error ? `<div class="kv"><span class="k">Error</span><span class="v" style="font-size:11px;color:var(--red)">${data.error}</span></div>` : ''}
     `;
   } catch(e) {
     setBTPCard(port, 'unreachable', 0);
