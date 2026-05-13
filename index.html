@@ -484,6 +484,7 @@ body::before {
         <button class="proto-btn" data-proto="SMB" onclick="selectProto(this)">SMB</button>
         <button class="proto-btn" data-proto="HANA" onclick="selectProto(this)">SAP HANA</button>
         <button class="proto-btn" data-proto="BTP" onclick="selectProto(this)">SAP BTP</button>
+        <button class="proto-btn" data-proto="AMQP" onclick="selectProto(this)">Event Mesh (AMQP)</button>
         <button class="proto-btn" data-proto="TCP" onclick="selectProto(this)">TCP</button>
       </div>
 
@@ -887,7 +888,7 @@ let dnsResult = null;
 const PROTO_PORTS = {
   HTTPS: 443, SFTP: 2222, SQL: 1433,
   POSTGRES: 5432, RabbitMQ: 5672, SMB: 445, HANA: 30015,
-  WEBMETHODS: 5555, TCP: 80
+  WEBMETHODS: 5555, TCP: 80, BTP: 8080, AMQP: 5671
 };
 
 
