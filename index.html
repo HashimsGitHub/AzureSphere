@@ -1800,6 +1800,7 @@ function renderKV(pairs) {
 //  TEST LOG — drawer + all test types
 // ══════════════════════════════════════════════
 function addToLog(t) {
+  const passed = t.result === 'pass' || t.status === 'pass' || t.result === 'ok';
   testLog.unshift({
     ts:      new Date().toISOString(),
     type:    t.type    || 'Connectivity',
@@ -1808,10 +1809,9 @@ function addToLog(t) {
     proto:   t.proto   || '—',
     result:  t.result  || t.status || 'unknown',
     latency: t.latency || null,
-    detail:  t.detail  || (t.result === 'pass' || t.result === 'ok' ? `Connected in ${t.latency}ms` : 'Failed / timeout')
+    detail:  t.detail  || (passed ? `Connected in ${t.latency}ms` : 'Connection refused / timeout')
   });
   renderLog();
-  // update badge
   const badge = document.getElementById('log-badge');
   badge.style.display = '';
   badge.textContent = testLog.length;
