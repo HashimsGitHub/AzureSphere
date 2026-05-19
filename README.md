@@ -77,8 +77,7 @@ vmb-persona-sftp         — atmoz/sftp SFTP server (port 2222)
 
 ### UberRoute — Live Traceroute
 
-<img width="1399" height="790" alt="image" src="https://github.com/user-attachments/assets/f07af30b-90c3-4b28-af55-1d945d49dc45" />
-
+<img width="1378" height="616" alt="image" src="https://github.com/user-attachments/assets/dc9d5c6b-7604-49fe-8e20-e0e9cb7c8df0" />
 
 ### Destination Host — Enterprise Service Simulator
 
