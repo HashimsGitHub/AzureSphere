@@ -18,6 +18,7 @@ Enterprise cloud migrations fail at integration — not infrastructure. Network 
 | **DNS split-brain** — FQDNs resolve differently inside and outside Azure VNets | Split-brain detection and Azure Private DNS zone awareness |
 | **SAP BTP integration readiness** — uncertain whether Integration Suite and Event Mesh are reachable | Dedicated SAP BTP tab tests all BTP service endpoints with live results |
 | **AS2/EDI connectivity** — B2B integration requires end-to-end message delivery proof | Live AS2 exchange with MDN receipt confirmation |
+| **Network path visibility** — unknown routing between source and destination | UberRoute live traceroute maps every hop with RTT and packet loss |
 | **Audit and compliance** — no record of pre-go-live connectivity validation | Exportable Test Log (CSV) captures every test with timestamp, result, and latency |
 
 ---
@@ -34,21 +35,38 @@ Source Host (VM A)                         Destination Host (VM B)
 │  ├─ TCP connect + latency    │──TLS────▶ │  HTTPS/TLS          :8443    │
 │  ├─ TLS handshake + cert     │──HANA───▶ │  SAP HANA           :30015   │
 │  ├─ DNS resolution           │──HTTP───▶ │  webMethods IS      :5555    │
-│  ├─ ICMP / TCP ping          │──SMB────▶ │  SMB / Azure Files  :445     │
+│  ├─ ICMP ping                │──SMB────▶ │  SMB / Azure Files  :445     │
 │  ├─ AS2 message exchange     │──SFTP───▶ │  SFTP               :2222    │
-│  └─ SAP BTP connectivity     │──BTP────▶ │  SAP BTP Suite      :8080    │
-└──────────────────────────────┘──AMQP───▶ │  SAP Event Mesh     :5671    │
-         ▲                                 └──────────────────────────────┘
-         │                                              ▲
+│  ├─ SAP BTP connectivity     │──BTP────▶ │  SAP BTP Suite      :8080    │
+│  └─ UberRoute traceroute     │──AMQP───▶ │  SAP Event Mesh     :5671    │
+└──────────────────────────────┘           └──────────────────────────────┘
+         ▲                                              ▲
     Engineering Team                            Engineering Team
   https://VMA-IP                              https://VMB-IP
+```
+
+### VM A Container Stack
+
+```
+azuresphere-agent        — Go diagnostic backend  (port 8080, host network)
+azuresphere-traceroute   — gophernet/traceroute sidecar (NET_ADMIN + NET_RAW)
+https-server             — nginx TLS reverse proxy (ports 80, 443)
+```
+
+### VM B Container Stack
+
+```
+vmb-dashboard            — nginx dashboard (ports 80, 443)
+vmb-persona-api          — Go multi-protocol listener (port 9090 + all service ports)
+vmb-persona-https        — nginx TLS persona (port 8443)
+vmb-persona-sftp         — atmoz/sftp SFTP server (port 2222)
 ```
 
 ---
 
 ## Screenshots
 
-### Source Host — Digital Twin · Enterprise Connectivity Diagnostic
+### Source Host — Connectivity Testing
 
 <img width="1172" height="845" alt="image" src="https://github.com/user-attachments/assets/a173a52e-1974-4bbf-a547-b9c7ba2d6312" />
 <img width="1750" height="887" alt="image" src="https://github.com/user-attachments/assets/692976b2-39a0-4c32-a150-ba86d61070f9" />
@@ -57,7 +75,11 @@ Source Host (VM A)                         Destination Host (VM B)
 <img width="820" height="915" alt="image" src="https://github.com/user-attachments/assets/332ec7db-c333-4c34-9b6a-d6da90202cc5" />
 <img width="1405" height="910" alt="image" src="https://github.com/user-attachments/assets/faa9f950-9ec1-4140-b6e9-c26d0a884df4" />
 
-### Destination Host — Enterprise Service Endpoint · Multi-Protocol Listener
+### UberRoute — Live Traceroute
+
+*Screenshot coming soon*
+
+### Destination Host — Enterprise Service Simulator
 
 <img width="1378" height="739" alt="image" src="https://github.com/user-attachments/assets/3674c21e-32a1-459d-b382-e5c3bc9e0287" />
 <img width="1372" height="856" alt="image" src="https://github.com/user-attachments/assets/69e779b5-7aba-48fd-a89a-6ac984159575" />
@@ -84,6 +106,9 @@ A dedicated tab purpose-built for SAP cloud migrations. Validate reachability to
 **AS2 / EDI Exchange**
 Prove end-to-end B2B message delivery before connecting production EDI systems. Send a real AS2 message to the destination host and receive a signed MDN acknowledgement — confirming the full integration path works.
 
+**UberRoute — Live Traceroute**
+Map the full network path between VM A and any target, hop by hop, in real time. Built on a dedicated [gophernet/traceroute](https://hub.docker.com/r/gophernet/traceroute) Docker sidecar container with `NET_ADMIN` and `NET_RAW` capabilities — solving the raw socket restrictions that prevent traceroute from running directly inside Docker. Results appear live as each hop is discovered: animated hop circles colour-coded by status (ok / timeout / reached), a live-scaling RTT bar chart, a completion summary (total hops, avg RTT, duration, reached), and a full hop detail table with per-probe timing.
+
 **Test Log with CSV Export**
 Every test run across every tab is captured automatically — Connectivity, TLS, DNS, AS2, SAP BTP. A live counter badge in the header shows activity at a glance. Export the full log to CSV for Excel analysis, migration sign-off documentation, and compliance audit trails.
 
@@ -91,7 +116,7 @@ Every test run across every tab is captured automatically — Connectivity, TLS,
 
 ### Destination Host (VM B) — Enterprise Service Simulator
 
-**10 Protocol Personas — Running Simultaneously**
+**11 Protocol Personas — Running Simultaneously**
 
 | Service | Protocol | Port | Simulates |
 |---|---|---|---|
@@ -102,6 +127,7 @@ Every test run across every tab is captured automatically — Connectivity, TLS,
 | SAP HANA | HANA SQL | 30015 | SAP HANA on-premises and cloud |
 | webMethods IS | HTTP | 5555 | Software AG webMethods Integration Server |
 | SMB / Azure Files | SMB | 445 | Windows file shares, Azure Files |
+| SFTP | SSH/SFTP | 2222 | SFTP file transfer endpoint |
 | Custom TCP App | TCP | 8888 | Any generic TCP application |
 | SAP BTP Integration Suite | BTP/HTTP | 8080 | SAP Integration Suite iFlow endpoints |
 | SAP Event Mesh | AMQP/TLS | 5671 | SAP Event Mesh messaging service |
@@ -119,7 +145,7 @@ Extend the platform to any additional port or application without writing code. 
 
 ## Supported Protocols
 
-`SQL` · `PostgreSQL` · `FTP` · `AMQP / RabbitMQ` · `HANA` · `webMethods` · `SMB` · `SFTP` · `HTTPS / TLS` · `AS2` · `SAP BTP` · `SAP Event Mesh` · `Custom TCP`
+`SQL` · `PostgreSQL` · `FTP` · `AMQP / RabbitMQ` · `HANA` · `webMethods` · `SMB` · `SFTP` · `HTTPS / TLS` · `AS2` · `SAP BTP` · `SAP Event Mesh` · `Custom TCP` · `ICMP Ping` · `Traceroute`
 
 ---
 
@@ -153,7 +179,7 @@ Both scripts are fully automated — dependencies, Docker, SSL certificates, and
 
 - Two Ubuntu 22.04 VMs in Azure (B1s or larger)
 - Azure NSG inbound rules open for the relevant ports on each VM
-- Git installed on both VMs
+- Git installed on both VMs (`sudo apt-get install -y git`)
 
 ---
 
@@ -166,13 +192,14 @@ Both scripts are fully automated — dependencies, Docker, SSL certificates, and
 | 443 | AzureSphere dashboard (HTTPS) |
 | 80 | HTTP → HTTPS redirect |
 | 22 | SSH administration |
-| 2222 | SFTP test endpoint |
 
 ### VM B — Destination Host
 
 | Port | Service |
 |---|---|
 | 443 | AzureSphere dashboard (HTTPS) |
+| 80 | HTTP → HTTPS redirect |
+| 22 | SSH administration |
 | 1433 | SQL Server |
 | 5432 | PostgreSQL |
 | 21 | FTP |
@@ -180,13 +207,79 @@ Both scripts are fully automated — dependencies, Docker, SSL certificates, and
 | 30015 | SAP HANA |
 | 5555 | webMethods IS |
 | 2222 | SFTP |
-| 8443 | HTTPS/TLS |
+| 8443 | HTTPS/TLS persona |
 | 445 | SMB / Azure Files |
 | 8888 | Custom TCP |
 | 8080 | SAP BTP Integration Suite |
 | 5671 | SAP Event Mesh |
-| 9090 | Persona API + AS2 (VM A source only) |
-| 22 | SSH administration |
+| 9090 | Persona API + AS2 (internal — VM A source only) |
+
+---
+
+## Repository Structure
+
+```
+AzureSphere/
+├── index.html                     # VM A dashboard
+├── docker-compose.yml             # VM A containers
+├── start-vma.sh                   # VM A one-command deploy
+├── agent/
+│   ├── main.go                    # Go backend agent
+│   ├── go.mod
+│   └── Dockerfile                 # Multi-stage Go build + docker-cli
+├── nginx/
+│   └── conf/default.conf          # nginx TLS reverse proxy config
+└── simulator/
+    ├── docker-compose.yml         # VM B containers
+    ├── start-vmb.sh               # VM B one-command deploy
+    ├── nginx/
+    │   ├── conf/default.conf
+    │   └── html/index.html        # VM B dashboard
+    └── personas/
+        ├── main.go                # Go multi-protocol persona server
+        ├── go.mod
+        ├── Dockerfile
+        └── https-persona.conf     # nginx TLS persona config
+```
+
+---
+
+## Troubleshooting
+
+**Dashboard shows "Agent offline"**
+```bash
+cd ~/AzureSphere
+sudo docker-compose ps
+sudo docker-compose logs agent
+curl http://localhost:8080/api/info
+```
+
+**UberRoute shows no hops / traceroute not working**
+```bash
+# Verify the sidecar is running
+sudo docker ps | grep traceroute
+# Should show: azuresphere-traceroute   Up
+
+# Test the sidecar directly
+sudo docker exec azuresphere-traceroute traceroute -m 5 8.8.8.8
+```
+
+**VM B connection log empty after running tests**
+Port 443 connects to the nginx dashboard container, not the persona API — expected behaviour. Test against persona ports (1433, 5432, 5672, etc.) to generate entries in the connection log.
+
+**Docker networking fails after VM reset**
+```bash
+sudo systemctl restart docker
+sudo docker network prune -f
+bash start-vma.sh   # or start-vmb.sh on VM B
+```
+
+**AS2 returns 404 after redeploy**
+```bash
+cd ~/AzureSphere/simulator
+sudo docker-compose build --no-cache persona-api
+sudo docker-compose down && sudo docker-compose up -d
+```
 
 ---
 
