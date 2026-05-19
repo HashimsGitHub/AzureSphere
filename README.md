@@ -243,46 +243,6 @@ AzureSphere/
 ```
 
 ---
-
-## Troubleshooting
-
-**Dashboard shows "Agent offline"**
-```bash
-cd ~/AzureSphere
-sudo docker-compose ps
-sudo docker-compose logs agent
-curl http://localhost:8080/api/info
-```
-
-**UberRoute shows no hops / traceroute not working**
-```bash
-# Verify the sidecar is running
-sudo docker ps | grep traceroute
-# Should show: azuresphere-traceroute   Up
-
-# Test the sidecar directly
-sudo docker exec azuresphere-traceroute traceroute -m 5 8.8.8.8
-```
-
-**VM B connection log empty after running tests**
-Port 443 connects to the nginx dashboard container, not the persona API — expected behaviour. Test against persona ports (1433, 5432, 5672, etc.) to generate entries in the connection log.
-
-**Docker networking fails after VM reset**
-```bash
-sudo systemctl restart docker
-sudo docker network prune -f
-bash start-vma.sh   # or start-vmb.sh on VM B
-```
-
-**AS2 returns 404 after redeploy**
-```bash
-cd ~/AzureSphere/simulator
-sudo docker-compose build --no-cache persona-api
-sudo docker-compose down && sudo docker-compose up -d
-```
-
----
-
 ## Related Tools
 
 **[SSL-CheckTool](https://github.com/HashimsGitHub/SSL-CheckTool)** — PowerShell enterprise HTTPS diagnostic tool by the same author. AzureSphere's TLS inspector is architecturally aligned with SSL-CheckTool's staged approach: DNS → TCP → TLS handshake → trust validation → certificate chain → legacy TLS audit.
