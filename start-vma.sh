@@ -56,7 +56,6 @@ echo "[4/6] Creating directory structure..."
 mkdir -p "${INSTALL_DIR}/nginx/conf"
 mkdir -p "${INSTALL_DIR}/nginx/certs"
 mkdir -p "${INSTALL_DIR}/nginx/html"
-mkdir -p "${INSTALL_DIR}/sftp/data"
 
 # Always overwrite index.html from the checked-out branch (prevents stale cache from old deploys)
 cp -f "${INSTALL_DIR}/index.html" "${INSTALL_DIR}/nginx/html/index.html"
@@ -132,7 +131,7 @@ cd "${INSTALL_DIR}"
 # Docker builds it fresh from the cloned Go source — no pre-built binary needed
 # No docker-compose.override.yml required
 sudo docker-compose build --no-cache agent
-sudo docker-compose pull --quiet https-server sftp-server traceroute-runner 2>/dev/null || true
+sudo docker-compose pull --quiet https-server traceroute-runner 2>/dev/null || true
 sudo docker-compose up -d
 
 # Wait for nginx then reload
@@ -157,7 +156,6 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 echo "  Dashboard : https://${IP}"
 echo "  Agent API : http://${IP}:8080/api/info"
-echo "  SFTP      : sftp -P 2222 testuser@${IP}  (pass: password)"
 echo ""
 echo "  Active containers:"
 sudo docker-compose ps

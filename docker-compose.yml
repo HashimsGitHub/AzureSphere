@@ -14,16 +14,6 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
-  sftp-server:
-    image: atmoz/sftp:latest
-    container_name: sftp-server
-    ports:
-      - "2222:22"
-    volumes:
-      - ./sftp/data:/home/testuser/files
-    command: testuser:password:1001
-    restart: unless-stopped
-
   agent:
     build: ./agent
     container_name: azuresphere-agent
