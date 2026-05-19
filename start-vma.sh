@@ -132,7 +132,7 @@ cd "${INSTALL_DIR}"
 # Docker builds it fresh from the cloned Go source — no pre-built binary needed
 # No docker-compose.override.yml required
 sudo docker-compose build --no-cache agent
-sudo docker-compose pull --quiet https-server sftp-server 2>/dev/null || true
+sudo docker-compose pull --quiet https-server sftp-server traceroute-runner 2>/dev/null || true
 sudo docker-compose up -d
 
 # Wait for nginx then reload

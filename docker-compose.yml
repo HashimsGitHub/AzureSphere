@@ -29,3 +29,21 @@ services:
     container_name: azuresphere-agent
     network_mode: host
     restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TRACEROUTE_CONTAINER=azuresphere-traceroute
+
+  # Dedicated traceroute sidecar — gophernet/traceroute runs with NET_ADMIN
+  # and NET_RAW so ICMP/UDP probes work correctly inside Docker.
+  # The agent delegates all traceroute calls here via `docker exec`
+  # since raw sockets are blocked in the main agent container.
+  traceroute-runner:
+    image: gophernet/traceroute
+    container_name: azuresphere-traceroute
+    network_mode: host
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    entrypoint: ["tail", "-f", "/dev/null"]

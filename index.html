@@ -456,6 +456,7 @@ body::before {
   <button class="tab" onclick="switchTab('dns')">DNS</button>
   <button class="tab" onclick="switchTab('as2')">AS2 Exchange</button>
   <button class="tab" onclick="switchTab('btp')">SAP BTP</button>
+  <button class="tab" onclick="switchTab('uberroute')" style="color:var(--cyan);font-weight:600">UberRoute</button>
 </div>
 
 <!-- ══════════════════════════════════════════════ -->
@@ -887,6 +888,104 @@ IEA*1*000000001~</textarea>
     </table>
   </div>
 </div>
+
+<div id="tab-uberroute" class="tab-content">
+  <div class="panel">
+    <div class="panel-title">
+      <i class="fas fa-route" style="color:var(--cyan)"></i> UberRoute
+      <span style="font-size:12px;font-weight:400;color:var(--text-muted);margin-left:12px">Live Traceroute via Docker Sidecar</span>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <div style="position:relative;flex:1;min-width:240px">
+        <i class="fas fa-map-marker-alt" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--cyan);font-size:12px;pointer-events:none"></i>
+        <input id="uber-host" type="text" autocomplete="off" spellcheck="false"
+          style="width:100%;padding:10px 12px 10px 32px;background:rgba(0,210,255,0.06);border:1px solid rgba(0,210,255,0.25);border-radius:8px;color:#e0f7ff;font-size:14px;font-family:var(--mono);outline:none;box-sizing:border-box"
+          placeholder="Target host or IP — e.g. 8.8.8.8 or github.com"
+          onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='rgba(0,210,255,0.25)'"
+          onkeydown="if(event.key==='Enter')runUberRoute()" />
+      </div>
+      <select id="uber-maxhops" style="padding:10px 12px;background:rgba(0,210,255,0.06);border:1px solid rgba(0,210,255,0.25);border-radius:8px;color:#e0f7ff;font-size:13px;cursor:pointer;outline:none">
+        <option value="15">15 hops</option>
+        <option value="20">20 hops</option>
+        <option value="30" selected>30 hops</option>
+      </select>
+      <button id="uber-launch-btn" onclick="runUberRoute()"
+        style="padding:10px 22px;background:linear-gradient(135deg,#00d4ff,#00ff88);color:#0d1117;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap;transition:opacity .2s">
+        <i class="fas fa-paper-plane"></i>&nbsp; Launch Trace
+      </button>
+    </div>
+
+    <!-- Status bar -->
+    <div id="uber-status-bar" style="display:none;background:rgba(0,210,255,0.05);border:1px solid rgba(0,210,255,0.2);border-radius:10px;padding:10px 16px 8px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap">
+        <span id="uber-dot" style="width:9px;height:9px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 0 rgba(0,210,255,.6);animation:uberPulse 1.2s infinite;flex-shrink:0;display:inline-block"></span>
+        <span id="uber-status-text" style="font-size:13px;color:var(--text-muted);flex:1">Initialising…</span>
+        <span id="uber-hop-count" style="background:rgba(0,210,255,0.15);color:var(--cyan);border-radius:12px;padding:2px 10px;font-size:12px;font-weight:600;font-family:var(--mono)">0 hops</span>
+        <span id="uber-elapsed" style="font-size:12px;color:#607080;font-family:monospace">0s</span>
+      </div>
+      <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+        <div id="uber-progress-fill" style="height:100%;background:linear-gradient(90deg,#00d4ff,#00ff88);border-radius:4px;width:0%;transition:width .4s ease"></div>
+      </div>
+    </div>
+
+    <!-- Live hop visualiser -->
+    <div id="uber-vis-wrap" style="display:none;background:rgba(0,0,0,0.3);border:1px solid rgba(0,210,255,0.12);border-radius:12px;padding:20px;margin-bottom:16px;min-height:160px">
+      <div id="uber-nodes" style="display:flex;flex-wrap:wrap;gap:10px 6px;align-items:flex-start"></div>
+      <!-- RTT chart -->
+      <div id="uber-rtt-wrap" style="display:none;margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06)">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px"><i class="fas fa-chart-bar" style="color:var(--cyan);margin-right:5px"></i>RTT per Hop (ms)</div>
+        <div id="uber-rtt-bars" style="display:flex;align-items:flex-end;gap:4px;height:80px;padding-bottom:18px"></div>
+      </div>
+      <!-- Summary -->
+      <div id="uber-summary" style="display:none;margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);display:none;align-items:center;gap:24px;flex-wrap:wrap">
+        <span id="uber-sum-icon" style="font-size:34px;color:#00ff88"><i class="fas fa-check-circle"></i></span>
+        <div style="display:flex;gap:24px;flex-wrap:wrap">
+          <div style="display:flex;flex-direction:column;align-items:center"><span id="sum-hops"  style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--cyan)">—</span><span style="font-size:11px;color:var(--text-muted)">Hops</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center"><span id="sum-rtt"   style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--cyan)">—</span><span style="font-size:11px;color:var(--text-muted)">Avg RTT</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center"><span id="sum-time"  style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--cyan)">—</span><span style="font-size:11px;color:var(--text-muted)">Duration</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center"><span id="sum-reached" style="font-size:22px;font-weight:800;font-family:var(--mono)">—</span><span style="font-size:11px;color:var(--text-muted)">Reached</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hop detail table -->
+    <div id="uber-table-panel" style="display:none;background:rgba(0,0,0,0.2);border:1px solid rgba(0,210,255,0.1);border-radius:10px;overflow:hidden">
+      <div style="padding:11px 16px;font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.06);color:var(--text-muted)">
+        <i class="fas fa-table" style="color:var(--cyan)"></i> Hop Detail
+      </div>
+      <div style="overflow-x:auto">
+        <table class="log-table" style="font-family:var(--mono);font-size:12px">
+          <thead><tr>
+            <th>#</th><th>Hostname</th><th>IP</th>
+            <th>Probe 1</th><th>Probe 2</th><th>Probe 3</th>
+            <th>Avg RTT</th><th>Status</th>
+          </tr></thead>
+          <tbody id="uber-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes uberPulse{0%{box-shadow:0 0 0 0 rgba(0,210,255,.6)}70%{box-shadow:0 0 0 8px rgba(0,210,255,0)}100%{box-shadow:0 0 0 0 rgba(0,210,255,0)}}
+@keyframes hopAppear{to{opacity:1;transform:translateY(0)}}
+.uber-hop-node{display:flex;flex-direction:column;align-items:center;width:84px;opacity:0;transform:translateY(10px);animation:hopAppear .3s ease forwards}
+.uber-hop-circle{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;font-family:var(--mono);border:2px solid;transition:box-shadow .3s}
+.uber-hop-circle.ok{background:rgba(0,210,255,0.12);border-color:rgba(0,210,255,0.6);color:var(--cyan)}
+.uber-hop-circle.ok:hover{box-shadow:0 0 18px rgba(0,210,255,0.5)}
+.uber-hop-circle.timeout{background:rgba(255,160,0,0.08);border-color:rgba(255,160,0,0.4);color:#ffa000}
+.uber-hop-circle.reached{background:rgba(0,255,136,0.15);border-color:#00ff88;color:#00ff88;box-shadow:0 0 20px rgba(0,255,136,.35)}
+.uber-hop-rtt{font-size:10px;margin-top:3px;color:#607080;font-family:monospace;text-align:center;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uber-hop-rtt.ok{color:#00d4ff}.uber-hop-rtt.timeout{color:#ffa000}
+.uber-hop-host{font-size:9px;margin-top:1px;color:#405060;text-align:center;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uber-connector{display:flex;align-items:center;padding-top:14px;color:rgba(0,210,255,0.3);font-size:16px}
+.uber-rtt-bar-wrap{display:flex;flex-direction:column;align-items:center;flex:1;min-width:16px;max-width:32px;height:100%;justify-content:flex-end}
+.uber-rtt-bar{width:100%;min-height:3px;border-radius:2px 2px 0 0;background:linear-gradient(180deg,#00d4ff,#005566);transition:height .4s ease}
+.uber-rtt-bar.timeout{background:linear-gradient(180deg,#ffa000,#5a3000)}
+.uber-rtt-bar-label{font-size:9px;color:#405060;margin-top:3px;font-family:monospace;text-align:center}
+</style>
 
 <!-- FOOTER -->
 <div class="footer">
@@ -2165,6 +2264,161 @@ async function runBTPTest() {
   }
 }
 
+</script>
+
+<script>
+/* ── UberRoute ─────────────────────────────────────────────── */
+var _uberPoll=null,_uberSafety=null,_uberElapsed=null,_uberJobID=null,_uberStart=null,_uberKnown=0;
+function runUberRoute(){
+  var host=document.getElementById('uber-host').value.trim();
+  if(!host){document.getElementById('uber-host').focus();return;}
+  var maxHops=parseInt(document.getElementById('uber-maxhops').value)||30;
+  _uberReset();
+  document.getElementById('uber-status-bar').style.display='block';
+  document.getElementById('uber-vis-wrap').style.display='block';
+  var btn=document.getElementById('uber-launch-btn');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>&nbsp; Running…';
+  _uberSetStatus('Launching traceroute on sidecar container…','pulse');
+  _uberStart=Date.now();
+  _uberElapsed=setInterval(function(){
+    document.getElementById('uber-elapsed').textContent=((Date.now()-_uberStart)/1000).toFixed(0)+'s';
+  },500);
+  fetch('/api/test/traceroute/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:host,max_hops:maxHops})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){_uberError(d.error);return;}
+      _uberJobID=d.job_id;
+      _uberSetStatus('Tracing route to '+host+'…','pulse');
+      _uberPoll=setInterval(_uberDoPoll,1000);
+      _uberSafety=setTimeout(function(){_uberFinish(null,true);},120000);
+    }).catch(function(e){_uberError(e.message);});
+}
+function _uberDoPoll(){
+  if(!_uberJobID)return;
+  fetch('/api/test/traceroute/poll?job_id='+_uberJobID)
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){_uberError(d.error);return;}
+      var hops=d.hops||[];
+      var newHops=hops.slice(_uberKnown);
+      newHops.forEach(function(hop){_uberRenderHop(hop);});
+      _uberKnown=hops.length;
+      var pct=Math.min(95,(_uberKnown/30)*100);
+      document.getElementById('uber-progress-fill').style.width=pct+'%';
+      document.getElementById('uber-hop-count').textContent=_uberKnown+' hops';
+      if(d.done)_uberFinish(d);
+    }).catch(function(){});
+}
+function _uberRenderHop(hop){
+  var nodes=document.getElementById('uber-nodes');
+  if(_uberKnown>0){
+    var conn=document.createElement('div');
+    conn.className='uber-connector';
+    conn.innerHTML='<i class="fas fa-chevron-right"></i>';
+    nodes.appendChild(conn);
+  }
+  var timedOut=hop.timed_out||(hop.rtts&&hop.rtts.every(function(r){return r==='*';}));
+  var isReached=hop.reached||false;
+  var circleClass=timedOut?'timeout':(isReached?'reached':'ok');
+  var rttText=timedOut?'* * *':(hop.avg_rtt_ms?hop.avg_rtt_ms.toFixed(1)+' ms':(hop.rtts?hop.rtts.join(' '):'—'));
+  var hostText=(hop.host||hop.ip||'—').substring(0,18);
+  var node=document.createElement('div');
+  node.className='uber-hop-node';
+  node.id='uhn-'+hop.hop;
+  node.style.animationDelay='0ms';
+  node.innerHTML='<div class="uber-hop-circle '+circleClass+'" title="'+(hop.host||'')+(hop.ip?' ('+hop.ip+')':'')+'">'+hop.hop+'</div>'
+    +'<div class="uber-hop-rtt '+(timedOut?'timeout':'ok')+'">'+rttText+'</div>'
+    +'<div class="uber-hop-host">'+hostText+'</div>';
+  nodes.appendChild(node);
+  _uberUpdateBar(hop);
+}
+function _uberUpdateBar(hop){
+  var container=document.getElementById('uber-rtt-bars');
+  var timedOut=hop.timed_out||(hop.rtts&&hop.rtts.every(function(r){return r==='*';}));
+  var wrap=document.createElement('div');wrap.className='uber-rtt-bar-wrap';
+  var bar=document.createElement('div');bar.className='uber-rtt-bar'+(timedOut?' timeout':'');
+  bar.dataset.rtt=hop.avg_rtt_ms||0;bar.style.height='3px';
+  var label=document.createElement('div');label.className='uber-rtt-bar-label';label.textContent=hop.hop;
+  wrap.appendChild(bar);wrap.appendChild(label);container.appendChild(wrap);
+  var allBars=container.querySelectorAll('.uber-rtt-bar');
+  var maxR=Math.max.apply(null,Array.from(allBars).map(function(b){return parseFloat(b.dataset.rtt)||0;}));
+  if(maxR<1)maxR=1;
+  allBars.forEach(function(b){b.style.height=Math.max(3,((parseFloat(b.dataset.rtt)||0)/maxR)*60)+'px';});
+  document.getElementById('uber-rtt-wrap').style.display='block';
+}
+function _uberFinish(d,timeout){
+  clearInterval(_uberPoll);clearTimeout(_uberSafety);clearInterval(_uberElapsed);
+  _uberPoll=null;
+  document.getElementById('uber-progress-fill').style.width='100%';
+  var btn=document.getElementById('uber-launch-btn');
+  btn.disabled=false;btn.innerHTML='<i class="fas fa-paper-plane"></i>&nbsp; Launch Trace';
+  var hops=d?(d.hops||[]):[];
+  var reached=d?d.reached:false;
+  var elapsed=_uberStart?(((Date.now()-_uberStart)/1000).toFixed(1)+'s'):'—';
+  if(timeout&&!hops.length){_uberSetStatus('Timed out.','err');return;}
+  _uberSetStatus(reached?'Target reached in '+hops.length+' hops.':'Trace complete — target not reached.',reached?'ok':'err');
+  if(reached&&hops.length){
+    var lastNode=document.getElementById('uhn-'+hops[hops.length-1].hop);
+    if(lastNode){var c=lastNode.querySelector('.uber-hop-circle');if(c)c.className='uber-hop-circle reached';}
+  }
+  var validRTTs=hops.filter(function(h){return !h.timed_out&&h.avg_rtt_ms;}).map(function(h){return h.avg_rtt_ms;});
+  var avgRTT=validRTTs.length?(validRTTs.reduce(function(a,b){return a+b;},0)/validRTTs.length).toFixed(1)+' ms':'—';
+  document.getElementById('sum-hops').textContent=hops.length||'—';
+  document.getElementById('sum-rtt').textContent=avgRTT;
+  document.getElementById('sum-time').textContent=elapsed;
+  document.getElementById('sum-reached').textContent=reached?'Yes ✓':'No';
+  document.getElementById('sum-reached').style.color=reached?'#00ff88':'#ffa000';
+  document.getElementById('uber-sum-icon').innerHTML=reached?'<i class="fas fa-check-circle"></i>':'<i class="fas fa-exclamation-triangle"></i>';
+  document.getElementById('uber-sum-icon').style.color=reached?'#00ff88':'#ffa000';
+  document.getElementById('uber-summary').style.display='flex';
+  _uberBuildTable(hops);
+}
+function _uberBuildTable(hops){
+  var tbody=document.getElementById('uber-table-body');tbody.innerHTML='';
+  hops.forEach(function(hop){
+    var timedOut=hop.timed_out||(hop.rtts&&hop.rtts.every(function(r){return r==='*';}));
+    var rtts=hop.rtts||[];while(rtts.length<3)rtts.push('—');
+    function rc(v){return(!v||v==='*'||v==='—')?'color:#304050':'color:#00d4ff';}
+    var badge=hop.reached?'<span style="color:#00ff88;font-weight:700">✓ Reached</span>'
+      :timedOut?'<span style="color:#ffa000">⏱ Timeout</span>':'<span style="color:#405060">—</span>';
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td style="color:var(--cyan);font-weight:700">'+hop.hop+'</td>'
+      +'<td>'+(hop.host||'—')+'</td><td>'+(hop.ip||'—')+'</td>'
+      +'<td style="'+rc(rtts[0])+'">'+rtts[0]+'</td>'
+      +'<td style="'+rc(rtts[1])+'">'+rtts[1]+'</td>'
+      +'<td style="'+rc(rtts[2])+'">'+rtts[2]+'</td>'
+      +'<td style="'+(hop.avg_rtt_ms?'color:#00d4ff':'color:#304050')+'">'+(hop.avg_rtt_ms?hop.avg_rtt_ms.toFixed(2)+' ms':'—')+'</td>'
+      +'<td>'+badge+'</td>';
+    tbody.appendChild(tr);
+  });
+  document.getElementById('uber-table-panel').style.display='block';
+}
+function _uberSetStatus(msg,state){
+  document.getElementById('uber-status-text').textContent=msg;
+  var dot=document.getElementById('uber-dot');
+  dot.style.animation='';dot.style.background='';dot.style.boxShadow='';
+  if(state==='pulse'){dot.style.animation='uberPulse 1.2s infinite';dot.style.background='var(--cyan)';}
+  else if(state==='ok'){dot.style.background='#00ff88';dot.style.boxShadow='0 0 8px #00ff8880';}
+  else{dot.style.background='#ff4444';dot.style.boxShadow='0 0 8px #ff444480';}
+}
+function _uberError(msg){
+  clearInterval(_uberPoll);clearTimeout(_uberSafety);clearInterval(_uberElapsed);
+  _uberSetStatus('Error: '+msg,'err');
+  document.getElementById('uber-progress-fill').style.background='#ff4444';
+  document.getElementById('uber-progress-fill').style.width='100%';
+  var btn=document.getElementById('uber-launch-btn');
+  btn.disabled=false;btn.innerHTML='<i class="fas fa-paper-plane"></i>&nbsp; Launch Trace';
+}
+function _uberReset(){
+  clearInterval(_uberPoll);clearTimeout(_uberSafety);clearInterval(_uberElapsed);
+  _uberJobID=null;_uberKnown=0;_uberStart=null;
+  ['uber-nodes','uber-rtt-bars','uber-table-body'].forEach(function(id){document.getElementById(id).innerHTML='';});
+  ['uber-summary','uber-rtt-wrap','uber-table-panel','uber-status-bar','uber-vis-wrap'].forEach(function(id){document.getElementById(id).style.display='none';});
+  document.getElementById('uber-progress-fill').style.width='0%';
+  document.getElementById('uber-progress-fill').style.background='';
+  document.getElementById('uber-hop-count').textContent='0 hops';
+  document.getElementById('uber-elapsed').textContent='0s';
+}
 </script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	"crypto/sha1"
 	"encoding/base64"
@@ -14,9 +15,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -768,6 +771,198 @@ func handleVMBClear(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, v)
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  UBERROUTE — Traceroute via gophernet/traceroute Docker sidecar
+//
+//  The agent cannot run traceroute directly (Docker blocks raw sockets).
+//  Instead it calls `docker exec azuresphere-traceroute traceroute <host>`
+//  which runs inside a sidecar container with NET_ADMIN + NET_RAW caps.
+//
+//  API:
+//    POST /api/test/traceroute/start  { "host":"...", "max_hops":30 }
+//      → { "job_id": "tr-..." }
+//    GET  /api/test/traceroute/poll?job_id=tr-...
+//      → { hops:[...], done:bool, reached:bool, elapsed_ms:int, ... }
+// ══════════════════════════════════════════════════════════════════════
+
+type TraceHop struct {
+	Hop      int      `json:"hop"`
+	Host     string   `json:"host"`
+	IP       string   `json:"ip"`
+	RTTs     []string `json:"rtts"`
+	AvgRTT   float64  `json:"avg_rtt_ms"`
+	TimedOut bool     `json:"timed_out"`
+	Reached  bool     `json:"reached"`
+}
+
+type TraceJob struct {
+	ID        string
+	Target    string
+	StartedAt time.Time
+	Hops      []TraceHop
+	Done      bool
+	Reached   bool
+	Error     string
+	mu        sync.Mutex
+}
+
+var (
+	traceJobs   = map[string]*TraceJob{}
+	traceJobsMu sync.Mutex
+	jobCounter  int
+)
+
+func tracerouteContainer() string {
+	if c := os.Getenv("TRACEROUTE_CONTAINER"); c != "" {
+		return c
+	}
+	return "azuresphere-traceroute"
+}
+
+var (
+	reHopLine = regexp.MustCompile(
+		`^\s*(\d+)\s+([^\s(]+)(?:\s+\(([^)]+)\))?((?:\s+(?:\d+(?:\.\d+)?\s+ms|\*))+)`)
+	reRTT = regexp.MustCompile(`(\d+(?:\.\d+)?)\s+ms|\*`)
+)
+
+func parseTraceLine(line string) (TraceHop, bool) {
+	m := reHopLine.FindStringSubmatch(line)
+	if m == nil {
+		return TraceHop{}, false
+	}
+	hop, _ := strconv.Atoi(m[1])
+	hostname, ip := m[2], m[3]
+	if hostname == "*" {
+		hostname, ip = "", ""
+	} else if ip == "" {
+		ip = hostname
+	}
+	probes := reRTT.FindAllStringSubmatch(m[4], -1)
+	var rtts []string
+	var sum float64
+	valid := 0
+	for _, p := range probes {
+		if p[1] == "" {
+			rtts = append(rtts, "*")
+		} else {
+			rtts = append(rtts, p[1]+" ms")
+			v, _ := strconv.ParseFloat(p[1], 64)
+			sum += v
+			valid++
+		}
+	}
+	var avg float64
+	if valid > 0 {
+		avg = math.Round((sum/float64(valid))*100) / 100
+	}
+	return TraceHop{Hop: hop, Host: hostname, IP: ip, RTTs: rtts, AvgRTT: avg, TimedOut: valid == 0}, true
+}
+
+func handleTracerouteStart(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions { w.WriteHeader(204); return }
+	if r.Method != http.MethodPost { http.Error(w, `{"error":"POST required"}`, 405); return }
+
+	var body struct {
+		Host    string `json:"host"`
+		MaxHops int    `json:"max_hops"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Host) == "" {
+		http.Error(w, `{"error":"host required"}`, 400)
+		return
+	}
+	if body.MaxHops <= 0 || body.MaxHops > 30 {
+		body.MaxHops = 30
+	}
+
+	traceJobsMu.Lock()
+	jobCounter++
+	jobID := fmt.Sprintf("tr-%d-%d", time.Now().Unix(), jobCounter)
+	job := &TraceJob{ID: jobID, Target: strings.TrimSpace(body.Host), StartedAt: time.Now(), Hops: []TraceHop{}}
+	traceJobs[jobID] = job
+	traceJobsMu.Unlock()
+
+	go func() {
+		defer func() {
+			job.mu.Lock()
+			job.Done = true
+			if len(job.Hops) > 0 {
+				last := job.Hops[len(job.Hops)-1]
+				if !last.TimedOut && (strings.Contains(last.Host, job.Target) || last.IP == job.Target) {
+					job.Reached = true
+				}
+			}
+			job.mu.Unlock()
+		}()
+
+		cmd := exec.Command("docker", "exec", tracerouteContainer(),
+			"traceroute", "-m", strconv.Itoa(body.MaxHops), "-w", "2", "-q", "3", job.Target)
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			job.mu.Lock(); job.Error = "pipe error: " + err.Error(); job.mu.Unlock()
+			return
+		}
+		if err := cmd.Start(); err != nil {
+			job.mu.Lock(); job.Error = "exec error: " + err.Error(); job.mu.Unlock()
+			return
+		}
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			if hop, ok := parseTraceLine(scanner.Text()); ok {
+				hop.Reached = !hop.TimedOut && (strings.Contains(hop.Host, job.Target) || hop.IP == job.Target)
+				job.mu.Lock()
+				job.Hops = append(job.Hops, hop)
+				if hop.Reached { job.Reached = true }
+				job.mu.Unlock()
+			}
+		}
+		cmd.Wait()
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"job_id": jobID})
+}
+
+func handleTraceroutePoll(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
+
+	jobID := r.URL.Query().Get("job_id")
+	if jobID == "" { http.Error(w, `{"error":"job_id required"}`, 400); return }
+
+	traceJobsMu.Lock()
+	job, ok := traceJobs[jobID]
+	traceJobsMu.Unlock()
+	if !ok { http.Error(w, `{"error":"job not found"}`, 404); return }
+
+	job.mu.Lock()
+	resp := map[string]interface{}{
+		"job_id":     job.ID,
+		"target":     job.Target,
+		"hops":       job.Hops,
+		"done":       job.Done,
+		"reached":    job.Reached,
+		"total_hops": len(job.Hops),
+		"elapsed_ms": time.Since(job.StartedAt).Milliseconds(),
+	}
+	if job.Error != "" { resp["error"] = job.Error }
+	done := job.Done
+	job.mu.Unlock()
+
+	json.NewEncoder(w).Encode(resp)
+
+	if done {
+		go func() {
+			time.Sleep(60 * time.Second)
+			traceJobsMu.Lock()
+			delete(traceJobs, jobID)
+			traceJobsMu.Unlock()
+		}()
+	}
+}
+
 func main() {
 	port := os.Getenv("AGENT_PORT")
 	if port == "" {
@@ -784,6 +979,8 @@ func main() {
 	mux.HandleFunc("/api/as2/send",      handleAS2Send)
 	mux.HandleFunc("/api/vmb/messages",  handleVMBMessages)
 	mux.HandleFunc("/api/vmb/clear",     handleVMBClear)
+	mux.HandleFunc("/api/test/traceroute/start", handleTracerouteStart)
+	mux.HandleFunc("/api/test/traceroute/poll",  handleTraceroutePoll)
 
 	// Health check
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
