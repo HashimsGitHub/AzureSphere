@@ -154,7 +154,7 @@ Extend the platform to any additional port or application without writing code. 
 ### Deploy VM A (Source Host)
 
 ```bash
-cd AzureSphere-main
+cd AzureSphere
 chmod +x start-vma.sh
 ./start-vma.sh
 ```
@@ -164,7 +164,7 @@ Open `https://[VM-A-IP]`
 ### Deploy VM B (Destination Host)
 
 ```bash
-cd AzureSphere-main/simulator
+cd AzureSphere/simulator
 chmod +x start-vmb.sh
 ./start-vmb.sh
 ```
