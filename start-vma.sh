@@ -1,68 +1,112 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
 # ══════════════════════════════════════════════════════════════
 #  AzureSphere — VM A (Source Host)
-#  Clones repo from GitHub, builds agent from source, starts
-#  containers. No GitHub Actions · No release tarballs · No secrets
+#  Fedora + Debian/Ubuntu compatible deployment script.
 # ══════════════════════════════════════════════════════════════
 
 REPO="https://github.com/HashimsGitHub/AzureSphere.git"
-INSTALL_DIR="$HOME/AzureSphere"
-
-# Optional branch override: bash start-vma.sh --branch feature/sap-btp
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="$SCRIPT_DIR"
 BRANCH="main"
-for arg in "$@"; do
-  case $arg in
-    --branch=*) BRANCH="${arg#*=}" ;;
-    --branch)   shift; BRANCH="$1" ;;
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --branch=*) BRANCH="${1#*=}"; shift ;;
+    --branch)   BRANCH="${2:?Missing branch name after --branch}"; shift 2 ;;
+    *)          echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+
+log() { printf '\n%s\n' "$*"; }
+
+install_dependencies() {
+  if command -v dnf >/dev/null 2>&1; then
+    echo "  Detected Fedora/RHEL-family system (dnf)."
+    sudo dnf -y install ca-certificates curl git openssl
+
+    if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+      echo "  Installing Docker Engine + Compose plugin from Docker's Fedora repository..."
+      sudo curl -fsSL https://download.docker.com/linux/fedora/docker-ce.repo \
+        -o /etc/yum.repos.d/docker-ce.repo
+      if ! sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+        echo "  Docker CE packages were unavailable; trying Fedora's Moby packages..."
+        sudo dnf -y install moby-engine docker-compose || {
+          echo "ERROR: Could not install Docker/Compose on this Fedora host." >&2
+          exit 1
+        }
+      fi
+    fi
+  elif command -v apt-get >/dev/null 2>&1; then
+    echo "  Detected Debian/Ubuntu-family system (apt)."
+    sudo apt-get update -y -qq
+    sudo apt-get install -y docker.io docker-compose-v2 openssl curl git 2>/dev/null || \
+      sudo apt-get install -y docker.io docker-compose openssl curl git
+  else
+    echo "ERROR: Supported package manager not found. Fedora (dnf) or Debian/Ubuntu (apt) is required." >&2
+    exit 1
+  fi
+}
+
+compose() {
+  if sudo docker compose version >/dev/null 2>&1; then
+    sudo docker compose "$@"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    sudo docker-compose "$@"
+  else
+    echo "ERROR: Docker Compose is not installed." >&2
+    exit 1
+  fi
+}
+
+open_firewall_ports() {
+  if command -v firewall-cmd >/dev/null 2>&1 && sudo systemctl is-active --quiet firewalld; then
+    echo "  Configuring firewalld for VM A..."
+    sudo firewall-cmd --permanent --add-service=http >/dev/null
+    sudo firewall-cmd --permanent --add-service=https >/dev/null
+    sudo firewall-cmd --permanent --add-port=8080/tcp >/dev/null
+    sudo firewall-cmd --reload >/dev/null
+    echo "  ✓ firewalld allows TCP 80, 443 and 8080"
+  else
+    echo "  firewalld is not active — no local firewall changes required"
+  fi
+}
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  AzureSphere — Source Host (VM A)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
 
-# ── [1/6] Dependencies ────────────────────────────────────────
-echo "[1/6] Installing dependencies..."
-sudo apt-get update -y -qq
-sudo apt-get install -y docker.io docker-compose openssl curl git 2>&1 \
-  | grep -E "^(Setting up|Get:|Err:)" || true
+log "[1/7] Installing dependencies..."
+install_dependencies
 
-# ── [2/6] Docker ──────────────────────────────────────────────
-echo ""
-echo "[2/6] Starting Docker..."
-sudo systemctl enable docker
-sudo systemctl start docker
+log "[2/7] Starting Docker..."
+sudo systemctl enable --now docker
+sudo docker info >/dev/null
 
-# ── [3/6] Clone / update repo ─────────────────────────────────
-echo ""
-echo "[3/6] Fetching latest source from GitHub..."
+echo "  ✓ Docker is running"
 
-if [ -d "${INSTALL_DIR}/.git" ]; then
-  echo "  Repo already present — pulling branch: ${BRANCH}..."
-  git -C "${INSTALL_DIR}" fetch origin
-  git -C "${INSTALL_DIR}" checkout "${BRANCH}"
-  git -C "${INSTALL_DIR}" reset --hard "origin/${BRANCH}"
+log "[3/7] Configuring host firewall..."
+open_firewall_ports
+
+log "[4/7] Preparing AzureSphere source..."
+if [[ -f "${INSTALL_DIR}/docker-compose.yml" && -f "${INSTALL_DIR}/index.html" ]]; then
+  echo "  ✓ Using local source: ${INSTALL_DIR}"
+  if [[ -d "${INSTALL_DIR}/.git" ]]; then
+    echo "  ✓ Git checkout: $(git -C "${INSTALL_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo local) ($(git -C "${INSTALL_DIR}" rev-parse --short HEAD 2>/dev/null || echo uncommitted))"
+  fi
 else
+  INSTALL_DIR="$HOME/AzureSphere"
+  echo "  Local source not found — cloning branch: ${BRANCH}..."
   git clone --depth=1 --branch "${BRANCH}" "${REPO}" "${INSTALL_DIR}"
+  echo "  ✓ Repository cloned to ${INSTALL_DIR}"
 fi
-echo "  ✓ Repository ready — branch: ${BRANCH} ($(git -C ${INSTALL_DIR} rev-parse --short HEAD))"
 
-# ── [4/6] Directory structure ─────────────────────────────────
-echo ""
-echo "[4/6] Creating directory structure..."
-mkdir -p "${INSTALL_DIR}/nginx/conf"
-mkdir -p "${INSTALL_DIR}/nginx/certs"
-mkdir -p "${INSTALL_DIR}/nginx/html"
-
-# Always overwrite index.html from the checked-out branch (prevents stale cache from old deploys)
+log "[5/7] Creating directory structure and nginx config..."
+mkdir -p "${INSTALL_DIR}/nginx/conf" "${INSTALL_DIR}/nginx/certs" "${INSTALL_DIR}/nginx/html"
 cp -f "${INSTALL_DIR}/index.html" "${INSTALL_DIR}/nginx/html/index.html"
-echo "  ✓ nginx/html/index.html (branch: ${BRANCH})"
 
-# Write nginx config inline (not stored in repo root, generated at deploy time)
-cat > "${INSTALL_DIR}/nginx/conf/default.conf" << 'NGINXEOF'
+cat > "${INSTALL_DIR}/nginx/conf/default.conf" <<'NGINXEOF'
 server {
     listen 443 ssl;
     server_name _;
@@ -102,13 +146,11 @@ server {
     return 301 https://$host$request_uri;
 }
 NGINXEOF
-echo "  ✓ nginx/conf/default.conf"
 
-# ── [5/6] SSL certificate ─────────────────────────────────────
-echo ""
-echo "[5/6] Generating SSL certificate..."
+echo "  ✓ nginx files ready"
 
-if [ ! -f "${INSTALL_DIR}/nginx/certs/server.crt" ]; then
+log "[6/7] Generating SSL certificate..."
+if [[ ! -f "${INSTALL_DIR}/nginx/certs/server.crt" ]]; then
   VMHOSTNAME=$(hostname -f 2>/dev/null || hostname)
   openssl req -x509 -nodes -days 825 \
     -newkey rsa:2048 \
@@ -122,33 +164,25 @@ else
   echo "  ✓ Existing certificate found — skipping"
 fi
 
-# ── [6/6] Build & start containers ───────────────────────────
-echo ""
-echo "[6/6] Building agent from source and starting containers..."
+log "[7/7] Building agent and starting containers..."
 cd "${INSTALL_DIR}"
+compose build --no-cache agent
+compose pull --quiet https-server traceroute-runner 2>/dev/null || true
+compose up -d
 
-# agent service uses 'build: ./agent' in docker-compose.yml
-# Docker builds it fresh from the cloned Go source — no pre-built binary needed
-# No docker-compose.override.yml required
-sudo docker-compose build --no-cache agent
-sudo docker-compose pull --quiet https-server traceroute-runner 2>/dev/null || true
-sudo docker-compose up -d
-
-# Wait for nginx then reload
-echo ""
-echo "  Waiting for nginx to be ready..."
 for i in $(seq 1 15); do
-  if sudo docker exec https-server nginx -t 2>/dev/null; then
-    sudo docker exec https-server nginx -s reload
-    echo "  ✓ nginx reloaded"
+  if sudo docker exec https-server nginx -t >/dev/null 2>&1; then
+    sudo docker exec https-server nginx -s reload >/dev/null 2>&1 || true
+    echo "  ✓ nginx is ready"
     break
   fi
-  echo "    attempt ${i}/15 — waiting..."
+  echo "    nginx attempt ${i}/15 — waiting..."
   sleep 2
 done
 
-# ── Summary ───────────────────────────────────────────────────
-IP=$(hostname -I | awk '{print $1}')
+IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+IP=${IP:-127.0.0.1}
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✓ VM A deployed successfully"
@@ -158,9 +192,10 @@ echo "  Dashboard : https://${IP}"
 echo "  Agent API : http://${IP}:8080/api/info"
 echo ""
 echo "  Active containers:"
-sudo docker-compose ps
+compose ps
 echo ""
 echo "  Troubleshooting:"
-echo "  sudo docker-compose logs agent"
+echo "  sudo docker compose logs agent"
 echo "  curl http://localhost:8080/api/info"
 echo ""
+echo "  NOTE: Also allow required ports in your cloud NSG/security group."

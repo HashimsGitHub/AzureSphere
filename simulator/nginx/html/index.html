@@ -150,7 +150,7 @@ body::before {
 
 <div class="api-offline" id="api-offline-banner">
   <i class="fas fa-exclamation-triangle"></i>
-  Service API unreachable — verify containers are running: <code>sudo docker-compose ps</code>
+  Service API unreachable — verify containers are running: <code>sudo docker compose ps</code>
 </div>
 
 <div class="stats-row">
@@ -337,7 +337,7 @@ async function loadData() {
     document.getElementById('api-offline-banner').style.display = '';
     document.getElementById('online-pill').innerHTML = '<span class="dot red"></span> API Offline';
     document.getElementById('service-list').innerHTML =
-      '<div class="empty"><i class="fas fa-exclamation-triangle" style="color:var(--red)"></i><br>Cannot reach service API<br><span style="font-size:10px">sudo docker-compose ps</span></div>';
+      '<div class="empty"><i class="fas fa-exclamation-triangle" style="color:var(--red)"></i><br>Cannot reach service API<br><span style="font-size:10px">sudo docker compose ps</span></div>';
   }
 }
 
@@ -418,7 +418,7 @@ function generateServiceConfig() {
       PERSONA_${n}: "${name}:${proto}:${port}:${banner}"
 
 # 2. Restart (zero downtime for other services):
-sudo docker-compose restart persona-api
+sudo docker compose restart persona-api
 
 # 3. Verify listening:
 sudo ss -tlnp | grep :${port}`;

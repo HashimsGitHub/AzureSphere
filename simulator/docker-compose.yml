@@ -10,9 +10,9 @@ services:
       - "443:443"
       - "80:80"
     volumes:
-      - ./nginx/conf:/etc/nginx/conf.d
-      - ./nginx/certs:/etc/nginx/certs
-      - ./nginx/html:/usr/share/nginx/html
+      - ./nginx/conf:/etc/nginx/conf.d:Z
+      - ./nginx/certs:/etc/nginx/certs:Z
+      - ./nginx/html:/usr/share/nginx/html:Z
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -64,8 +64,8 @@ services:
     ports:
       - "8443:443"    # FIX: container listens on 443 (https-persona.conf: listen 443 ssl)
     volumes:
-      - ./nginx/certs:/etc/nginx/certs
-      - ./personas/https-persona.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:Z
+      - ./personas/https-persona.conf:/etc/nginx/conf.d/default.conf:ro,Z
     networks:
       - azuresphere-net
     restart: unless-stopped
@@ -77,7 +77,7 @@ services:
     ports:
       - "2222:22"
     volumes:
-      - ./sftp-data:/home/sftpuser/files
+      - ./sftp-data:/home/sftpuser/files:Z
     command: sftpuser:SftpPass123:1001
     networks:
       - azuresphere-net

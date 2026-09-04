@@ -7,9 +7,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/conf:/etc/nginx/conf.d
-      - ./nginx/certs:/etc/nginx/certs
-      - ./nginx/html:/usr/share/nginx/html
+      - ./nginx/conf:/etc/nginx/conf.d:Z
+      - ./nginx/certs:/etc/nginx/certs:Z
+      - ./nginx/html:/usr/share/nginx/html:Z
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -21,6 +21,9 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    # Fedora SELinux can block access to the host Docker socket from a confined container.
+    security_opt:
+      - label=disable
     environment:
       - TRACEROUTE_CONTAINER=azuresphere-traceroute
 
